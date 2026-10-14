@@ -56,7 +56,9 @@ impl std::fmt::Debug for AiConfig {
 ///
 /// A `SecretValue` never leaves this function — it is converted to the
 /// credential immediately and zeroized on drop.
-async fn credential_from_ref(credential_ref: &str) -> Option<sentin8_secrets_sdk::secrets::SecretValue> {
+async fn credential_from_ref(
+    credential_ref: &str,
+) -> Option<sentin8_secrets_sdk::secrets::SecretValue> {
     // Bare reference (no `://`) — v1 registry format → AI env key.
     if !credential_ref.contains("://") {
         let env_key = format!(
@@ -87,7 +89,7 @@ async fn credential_from_ref(credential_ref: &str) -> Option<sentin8_secrets_sdk
             let path = std::path::PathBuf::from(&reference.path);
             std::fs::read(&path)
                 .ok()
-                .map(|bytes| sentin8_secrets_sdk::secrets::SecretValue::new(bytes))
+                .map(sentin8_secrets_sdk::secrets::SecretValue::new)
         }
         // Standard chain — Sentin8:Secrets service backend (production path).
         "secrets" | "service" | "sentin8-secrets" => {

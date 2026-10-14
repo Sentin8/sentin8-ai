@@ -195,7 +195,7 @@ async fn process_embedding_job(
             .bind(&job.source_id)
             .bind(&chunk.text)
             .bind(job.env_id)
-            .bind(crate::handlers::registry_version_for(&pool, job.env_id, &job.model).await)
+            .bind(crate::handlers::registry_version_for(pool, job.env_id, &job.model).await)
             .execute(&mut *tx)
             .await
             .map_err(|e| format!("embed insert failed: {e}"))?;

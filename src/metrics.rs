@@ -50,12 +50,7 @@ pub fn emit_inference_metrics(
         "subject_id": subject_id,
     });
     let emit = |event_name: &str, metrics: serde_json::Value, props: serde_json::Value| {
-        sentin8::shield::stat_emit::emit_metric_event(
-            "sentin8:ai",
-            event_name,
-            metrics,
-            props,
-        );
+        sentin8::shield::stat_emit::emit_metric_event("sentin8:ai", event_name, metrics, props);
     };
     if input_tokens > 0 {
         emit(

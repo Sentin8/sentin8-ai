@@ -14,9 +14,8 @@ use sentin8_ai_server::providers::{CompletionProvider, EmbeddingProvider};
 /// superuser would bypass RLS and void every isolation assertion,
 /// ).
 async fn db_pool() -> Option<sqlx::PgPool> {
-    let url = std::env::var("SENTIN8_AI_DB_DSN").unwrap_or_else(|_| {
-        "postgres://sentin8_ai_service@localhost:5432/sentin8".to_string()
-    });
+    let url = std::env::var("SENTIN8_AI_DB_DSN")
+        .unwrap_or_else(|_| "postgres://sentin8_ai_service@localhost:5432/sentin8".to_string());
     match sqlx::postgres::PgPool::connect(&url).await {
         Ok(p) => Some(p),
         Err(e) => {

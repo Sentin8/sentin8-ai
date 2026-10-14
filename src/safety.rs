@@ -151,7 +151,6 @@ pub async fn load_env_rules(
             blocked_terms: r
                 .get::<Vec<String>, _>("blocked_terms")
                 .into_iter()
-                .map(|t| t)
                 .collect(),
             enabled: r.get("enabled"),
         })
@@ -224,7 +223,7 @@ mod tests {
                 name: (*name).into(),
                 stage: (*stage).into(),
                 blocked_terms: (*stage == "input" || *stage == "output")
-                    .then(|| ())
+                    .then_some(())
                     .map(|_| Vec::new())
                     .unwrap_or_default(),
                 enabled: true,

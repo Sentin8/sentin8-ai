@@ -109,7 +109,7 @@ fn resolve_env_id(
     a: &auth::AuthContext,
     target_env_id: Option<&str>,
 ) -> Result<Uuid, (StatusCode, String)> {
-    if let Some(tid) = target_env_id.as_deref().filter(|s| !s.is_empty()) {
+    if let Some(tid) = target_env_id.filter(|s| !s.is_empty()) {
         return tid
             .parse::<Uuid>()
             .map_err(|_| err_bad("target_env_id must be a UUID"));
@@ -1006,8 +1006,7 @@ async fn idem_put(
         .ok()?;
     use glide::AsyncCommands as _;
     let full = format!("ai:idem:{env_id}:{key}");
-    let _: Result<Option<String>, _> =
-        client.set_ex(full, value.to_string(), 86400u64).await;
+    let _: Result<Option<String>, _> = client.set_ex(full, value.to_string(), 86400u64).await;
     Some(())
 }
 
@@ -1029,8 +1028,9 @@ async fn cache_put(
         .await
         .ok()?;
     use glide::AsyncCommands as _;
-    let _: Result<(), _> =
-        client.set_ex(key, serde_json::to_string(value).ok()?, 3600u64).await;
+    let _: Result<(), _> = client
+        .set_ex(key, serde_json::to_string(value).ok()?, 3600u64)
+        .await;
     Some(())
 }
 
