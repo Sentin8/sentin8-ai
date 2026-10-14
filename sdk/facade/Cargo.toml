@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright Logically Magic Inc. <hello@logicallymagic.com>
+# SPDX-FileCopyrightText: Copyright Hamid Jahanzad <Hamid@Jahanzad.com>
+# SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "sentin8-ai-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "sentin8-ai-sdk — per-service SDK mini-facade (client + contracts re-exports; SDD 3.1)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+sentin8-ai-client = { path = "../crates/ai-client" }

@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: Copyright Logically Magic Inc. <hello@logicallymagic.com>
+# SPDX-FileCopyrightText: Copyright Hamid Jahanzad <Hamid@Jahanzad.com>
+# SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "sentin8-ai-client"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Rust HTTP client for Sentin8:AI (platform AI capability layer)."
+
+[lib]
+name = "sentin8_ai_client"
+path = "src/lib.rs"
+
+[dependencies]
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+sentin8-middleware.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+sentin8-tls = { workspace = true }
