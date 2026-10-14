@@ -50,7 +50,9 @@ impl std::fmt::Debug for AiConfig {
 ///
 /// 1. `secrets://` — the Sentin8:Secrets service (production path).
 /// 2. `env://` — env mapping. Bare references (the v1 registry format) are
+///
 ///   treated as AI env keys: `SENTIN8_AI_PROVIDER_KEY_<SCREAMING_PATH>`
+///
 ///   (dev bootstrap; the path is upper-cased with separators → `_`).
 /// 3. `file://` — the local file backend for development.
 ///
