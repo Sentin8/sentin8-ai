@@ -4,7 +4,11 @@
     {
       "service_type": "sentin8:ai",
       "subdomain": "ai",
-      "binary": "sentin8-ai"
+      "binary": "sentin8-ai",
+      "telemetry_property": {
+        "slug": "ai",
+        "name": "Sentin8:AI Platform Telemetry"
+      }
     }
   ]
 }
