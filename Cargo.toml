@@ -32,7 +32,7 @@ path = "src/lib.rs"
 # THE SDK pin (RS 2.3) - the only cross-repo dependency. It carries the
 # entire shared library workspace (core/identity/tls/bus/shield/shell +
 # every ai-client/contracts SDK crate) behind the `sentin8` facade.
-sentin8 = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.4" }
+sentin8 = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
 sentin8-ai-sdk = { path = "sdk/facade" }
 # Service SDK mini-facades (SDD 3.1) — per-owner git pins
 sentin8-cron-sdk.workspace = true
@@ -92,11 +92,11 @@ async-trait = "0.1"
 # workspace exports every member crate under the same source (SDD §3.1;
 # the facade re-export alone is not enough for moved crates that link
 # leaf crates directly).
-sdk_git = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.4" }
-sentin8 = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.4" }
-sentin8-middleware = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.4" }
-sentin8-m2m = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.4" }
-sentin8-tls = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.4" }
+sdk_git = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
+sentin8 = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
+sentin8-middleware = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
+sentin8-m2m = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
+sentin8-tls = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
 sentin8-ai-client = { path = "sdk/crates/ai-client" }
 sentin8-cron-sdk = { git = "https://github.com/Sentin8/sentin8-cron", tag = "cron-sdk-v0.6.3" }
 sentin8-flow-sdk = { git = "https://github.com/Sentin8/sentin8-flow", tag = "flow-sdk-v0.6.3" }
