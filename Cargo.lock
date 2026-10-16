@@ -4078,21 +4078,6 @@ dependencies = [
 [[package]]
 name = "sentin8-config"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4#d391528feab8e8450d502ca8f77337a435ab9c53"
-dependencies = [
- "dotenvy",
- "figment",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 1.0.69",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "sentin8-config"
-version = "0.1.0"
 source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.5#b3169cd5ae87d5340ae1dba103a9469377263e40"
 dependencies = [
  "dotenvy",
@@ -4108,11 +4093,11 @@ dependencies = [
 [[package]]
 name = "sentin8-cron-client"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.3#545c51d6ced0b3fc38311d3afc55d57c291400fa"
+source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.4#7a185e1e4c941b5c79db9216bd6c263d14fa35d9"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
- "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
+ "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.5)",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4123,7 +4108,7 @@ dependencies = [
 [[package]]
 name = "sentin8-cron-contracts"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.3#545c51d6ced0b3fc38311d3afc55d57c291400fa"
+source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.4#7a185e1e4c941b5c79db9216bd6c263d14fa35d9"
 dependencies = [
  "chrono",
  "serde",
@@ -4134,7 +4119,7 @@ dependencies = [
 [[package]]
 name = "sentin8-cron-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.3#545c51d6ced0b3fc38311d3afc55d57c291400fa"
+source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.4#7a185e1e4c941b5c79db9216bd6c263d14fa35d9"
 dependencies = [
  "sentin8-cron-client",
  "sentin8-cron-contracts",
@@ -4156,19 +4141,6 @@ dependencies = [
 [[package]]
 name = "sentin8-crypto"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4#d391528feab8e8450d502ca8f77337a435ab9c53"
-dependencies = [
- "aes-gcm",
- "base64 0.22.1",
- "rand 0.8.8",
- "sha2 0.10.9",
- "thiserror 1.0.69",
- "zeroize",
-]
-
-[[package]]
-name = "sentin8-crypto"
-version = "0.1.0"
 source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.5#b3169cd5ae87d5340ae1dba103a9469377263e40"
 dependencies = [
  "aes-gcm",
@@ -4183,20 +4155,6 @@ dependencies = [
 name = "sentin8-errors"
 version = "0.1.0"
 source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.3#7e118594f72274874f7fd5b5ab049fb116ad2c4c"
-dependencies = [
- "anyhow",
- "axum",
- "http 1.5.0",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "sentin8-errors"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4#d391528feab8e8450d502ca8f77337a435ab9c53"
 dependencies = [
  "anyhow",
  "axum",
@@ -4248,12 +4206,12 @@ dependencies = [
 [[package]]
 name = "sentin8-flow-client"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.3#f702efcacc33ce189ace172ee7aa670b4dea2cdd"
+source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.4#4c670b3f46c1cdc88c359b4ef84ec66026433f90"
 dependencies = [
  "reqwest 0.12.28",
  "sentin8-flow-contracts",
- "sentin8-m2m 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
- "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
+ "sentin8-m2m 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.5)",
+ "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.5)",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4264,7 +4222,7 @@ dependencies = [
 [[package]]
 name = "sentin8-flow-contracts"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.3#f702efcacc33ce189ace172ee7aa670b4dea2cdd"
+source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.4#4c670b3f46c1cdc88c359b4ef84ec66026433f90"
 dependencies = [
  "chrono",
  "serde",
@@ -4276,7 +4234,7 @@ dependencies = [
 [[package]]
 name = "sentin8-flow-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.3#f702efcacc33ce189ace172ee7aa670b4dea2cdd"
+source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.4#4c670b3f46c1cdc88c359b4ef84ec66026433f90"
 dependencies = [
  "sentin8-flow-client",
  "sentin8-flow-contracts",
@@ -4318,26 +4276,6 @@ dependencies = [
  "sentin8-config 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.3)",
  "sentin8-crypto 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.3)",
  "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.3)",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "sentin8-m2m"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4#d391528feab8e8450d502ca8f77337a435ab9c53"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "reqwest 0.12.28",
- "sentin8-config 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
- "sentin8-crypto 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
- "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4400,35 +4338,6 @@ dependencies = [
  "rustls-graviola",
  "sentin8-config 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.3)",
  "sentin8-errors 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.3)",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tower",
- "tower-http 0.7.1",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
- "uuid",
- "valkey-glide",
-]
-
-[[package]]
-name = "sentin8-middleware"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4#d391528feab8e8450d502ca8f77337a435ab9c53"
-dependencies = [
- "axum",
- "chrono",
- "http 1.5.0",
- "hyper",
- "once_cell",
- "parking_lot",
- "reqwest 0.12.28",
- "rustls",
- "rustls-graviola",
- "sentin8-config 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
- "sentin8-errors 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.4)",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

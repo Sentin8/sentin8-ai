@@ -98,9 +98,9 @@ sentin8-middleware = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sd
 sentin8-m2m = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
 sentin8-tls = { git = "https://github.com/Sentin8/sentin8-sdk", tag = "sdk-v0.6.5" }
 sentin8-ai-client = { path = "sdk/crates/ai-client" }
-sentin8-cron-sdk = { git = "https://github.com/Sentin8/sentin8-cron", tag = "cron-sdk-v0.6.3" }
-sentin8-flow-sdk = { git = "https://github.com/Sentin8/sentin8-flow", tag = "flow-sdk-v0.6.3" }
-sentin8-stat-sdk = { git = "https://github.com/Sentin8/sentin8-stat", tag = "stat-sdk-v0.6.3" }
+sentin8-cron-sdk = { git = "https://github.com/Sentin8/sentin8-cron", tag = "cron-sdk-v0.6.4" }
+sentin8-flow-sdk = { git = "https://github.com/Sentin8/sentin8-flow", tag = "flow-sdk-v0.6.4" }
+sentin8-stat-sdk = { git = "https://github.com/Sentin8/sentin8-stat", tag = "stat-sdk-v0.6.4" }
 sentin8-storage-sdk = { git = "https://github.com/Sentin8/sentin8-storage", tag = "storage-sdk-v0.2.0" }
 sentin8-secrets-sdk = { git = "https://github.com/Sentin8/sentin8-secrets", tag = "secrets-sdk-v0.2.0" }
 sentin8-ai-sdk = { path = "sdk/facade" }
