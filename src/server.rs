@@ -287,7 +287,7 @@ pub fn routes(
         // POST alias for RFW row_action_post (renderer only supports POST)
         .route(
             "/v1/budgets/{feature}/delete",
-            post(handlers::delete_budget),
+            post(crate::ai_aliases::budget_delete),
         )
         // ── DLQ ──────────────────────────────────────────────────
         .route("/v1/dlq", get(handlers::list_dlq))
@@ -303,16 +303,21 @@ pub fn routes(
         // ── Document pipeline (/4) ──────────────────────────────────
         .route("/v1/documents/ingest", post(handlers::document_ingest))
         // ── Safety filters ( — env-configurable rules) ─────────────
+        // (The PUT /v1/filters/{name} form is the upsert; the collection
+        // POST bound here previously was unreachable-by-contract — the
+        // handler's Path(name) can never extract on a segment-less route
+        // (axum rejects with 500) and no consumer exists. Deleted per
+        // OAPEC: a served route must be a working contract.)
         .route(
             "/v1/filters",
-            post(handlers::put_filter).get(handlers::list_filters),
+            get(handlers::list_filters),
         )
         .route(
             "/v1/filters/{name}",
             put(handlers::put_filter).delete(handlers::delete_filter),
         )
         // POST alias for RFW row_action_post (renderer only supports POST)
-        .route("/v1/filters/{name}/delete", post(handlers::delete_filter))
+        .route("/v1/filters/{name}/delete", post(crate::ai_aliases::filter_delete))
         // ── Cost report ──────────────────────────────────────────
         .route("/v1/costs", get(handlers::cost_report))
         // ── Trace retention (internal) ────────────────────────────

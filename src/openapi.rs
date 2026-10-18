@@ -16,6 +16,21 @@ use crate::handlers;
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        sentin8::shell::policy_check_relation,
+        sentin8::shell::policy_delete_attribute,
+        sentin8::shell::policy_delete_relation,
+        sentin8::shell::policy_delete_set,
+        sentin8::shell::policy_get_set,
+        sentin8::shell::policy_list_attributes,
+        sentin8::shell::policy_list_relations,
+        sentin8::shell::policy_list_sets,
+        sentin8::shell::policy_mode_disable,
+        sentin8::shell::policy_mode_enforce,
+        sentin8::shell::policy_mode_shadow,
+        sentin8::shell::policy_put_attribute,
+        sentin8::shell::policy_put_relation,
+        sentin8::shell::policy_put_set,
+        sentin8::shell::policy_test_set,
         handlers::health,
         handlers::create_prompt,
         handlers::list_prompts,
@@ -30,10 +45,12 @@ use crate::handlers;
         handlers::put_filter,
         handlers::list_filters,
         handlers::delete_filter,
+        crate::ai_aliases::filter_delete,
         handlers::list_traces,
         handlers::agent_execute,
         handlers::put_budget,
         handlers::delete_budget,
+        crate::ai_aliases::budget_delete,
         handlers::list_dlq,
         handlers::replay_dlq,
         handlers::run_evaluation,
@@ -77,6 +94,7 @@ use crate::handlers;
     )),
     security(),
     tags(
+        (name = "policy", description = "Shield policy administration (shared surface)"),
         (name = "ai", description = "Sentin8:AI — prompt registry, inference primitives, retrieval, providers, traces"),
     ),
 )]

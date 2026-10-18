@@ -7,6 +7,7 @@
 //! this crate name (`sentin8_ai_server`), mirroring the post/cron pattern.
 
 pub mod agent;
+pub mod ai_aliases;
 pub mod auth;
 pub mod config;
 pub mod handlers;
