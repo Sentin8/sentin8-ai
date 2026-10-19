@@ -9,7 +9,7 @@
 //! route through [`ProviderRouter`], which applies the prompt's
 //! primary→fallback chain, per-call timeouts and bounded retries.
 //!
-//! Credentials are NEVER held here — the caller supplies the bearer via
+//! Credentials are NEVER held here - the caller supplies the bearer via
 //! [`ProviderCredential`], resolved at call time from a secret *reference*
 //! (architecture-; "secret-reference-only").
 //!
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 /// registry's secret reference. Never logged, never persisted.
 #[derive(Debug, Clone)]
 pub enum ProviderCredential {
-    /// Bearer API key (`Authorization: Bearer <key>` — OpenAI/Ollama Cloud).
+    /// Bearer API key (`Authorization: Bearer <key>` - OpenAI/Ollama Cloud).
     Bearer(String),
     /// `x-api-key` header (Anthropic).
     ApiKeyHeader(String),
@@ -90,7 +90,7 @@ pub struct EmbeddingRequest {
     pub inputs: Vec<String>,
 }
 
-/// Normalized embedding response — one vector per input, same order.
+/// Normalized embedding response - one vector per input, same order.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EmbeddingResponse {
     pub model: String,
@@ -107,11 +107,11 @@ pub struct StreamDelta {
     pub done: bool,
     /// Model echoed back by the provider.
     pub model: String,
-    /// Token accounting — populated on the terminal frame.
+    /// Token accounting - populated on the terminal frame.
     pub input_tokens: u64,
     pub output_tokens: u64,
     /// AI-1: true when the accounting was ESTIMATED (synthesized terminal
-    /// frame or a char/4 heuristic) instead of reported by the provider —
+    /// frame or a char/4 heuristic) instead of reported by the provider -
     /// dashboards can mark the sample as approximate.
     #[serde(default)]
     pub usage_estimated: bool,
@@ -137,7 +137,7 @@ impl ProviderError {
 // ── Provider trait ─────────────────────────────────────────────────────────
 
 /// The model-provider boundary. One impl per provider;
-/// all calls are authenticated by the host (Rust) — credentials never reach
+/// all calls are authenticated by the host (Rust) - credentials never reach
 /// WASM, prompts or clients.
 #[async_trait::async_trait]
 pub trait CompletionProvider: Send + Sync {
@@ -149,7 +149,7 @@ pub trait CompletionProvider: Send + Sync {
         req: &CompletionRequest,
     ) -> Result<CompletionResponse, ProviderError>;
     /// Provider-side token streaming : yields incremental deltas
-    /// straight from the provider's SSE stream. The default buffers —
+    /// straight from the provider's SSE stream. The default buffers -
     /// adapters that support SSE streaming override this (OpenAI-family and
     /// Ollama Cloud/vLLM all speak the OpenAI `stream: true` surface).
     async fn complete_stream(
@@ -163,7 +163,7 @@ pub trait CompletionProvider: Send + Sync {
         >,
         ProviderError,
     > {
-        // Default: single-shot — run the buffered call and yield one delta.
+        // Default: single-shot - run the buffered call and yield one delta.
         let resp = self.complete(client, credential, req).await?;
         let done = StreamDelta {
             delta: resp.content,
@@ -318,7 +318,7 @@ impl CompletionProvider for OpenAiAdapter {
         true
     }
 
-    // AI-1: the OpenAI-family body sends `stream_options.include_usage` —
+    // AI-1: the OpenAI-family body sends `stream_options.include_usage` -
     // a usage-bearing terminal frame (or `[DONE]`-flush of accumulated
     // accounting) closes the stream.
     fn reports_stream_usage(&self) -> bool {
@@ -567,7 +567,7 @@ async fn openai_stream(
                 if let Some(mut d) = terminal_pending.take() {
                     d.input_tokens = sse.input_tokens;
                     d.output_tokens = sse.output_tokens;
-                    // AI-1: usage never arrived after finish_reason — the
+                    // AI-1: usage never arrived after finish_reason - the
                     // flushed accounting is the estimate marker path.
                     d.usage_estimated = !sse.saw_usage;
                     return Some((Ok(d), (sse, None)));
@@ -582,7 +582,7 @@ async fn openai_stream(
                     continue;
                 }
                 if line.trim() == "data: [DONE]" || line.trim() == "data:[DONE]" {
-                    // Terminal frame — carry the accumulated accounting.
+                    // Terminal frame - carry the accumulated accounting.
                     let d = StreamDelta {
                         delta: String::new(),
                         done: true,
@@ -590,7 +590,7 @@ async fn openai_stream(
                         input_tokens: sse.input_tokens,
                         output_tokens: sse.output_tokens,
                         // AI-1: the [DONE] fallback synthesizes the terminal
-                        // from accumulated accounting — estimated when NO
+                        // from accumulated accounting - estimated when NO
                         // usage frame ever arrived.
                         usage_estimated: !sse.saw_usage,
                     };
@@ -612,7 +612,7 @@ async fn openai_stream(
                             sse.model = d.model.clone();
                         }
                         if d.done && d.input_tokens > 0 {
-                            // Usage-bearing terminal frame — emit immediately.
+                            // Usage-bearing terminal frame - emit immediately.
                             sse.finished = true;
                             return Some((Ok(d), (sse, None)));
                         }
@@ -642,7 +642,7 @@ async fn openai_stream(
                     }
                     None => {
                         // [DONE] without the prefix match above (whitespace
-                        // variants) or a non-data line — skip.
+                        // variants) or a non-data line - skip.
                         continue;
                     }
                 }
@@ -709,7 +709,7 @@ impl EmbeddingProvider for OpenAiAdapter {
     }
 }
 
-/// Anthropic `/v1/messages` (chat only; no embedding API — embeddings route
+/// Anthropic `/v1/messages` (chat only; no embedding API - embeddings route
 /// to another provider by prompt config).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnthropicAdapter {
@@ -837,7 +837,7 @@ impl CompletionProvider for AnthropicAdapter {
     }
 }
 
-/// Ollama Cloud — OpenAI-compatible `/v1/chat/completions` for chat, native
+/// Ollama Cloud - OpenAI-compatible `/v1/chat/completions` for chat, native
 /// `/api/embed` for embeddings ( v1 provider set).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OllamaCloudAdapter {
@@ -857,7 +857,7 @@ impl CompletionProvider for OllamaCloudAdapter {
         credential: &ProviderCredential,
         req: &CompletionRequest,
     ) -> Result<CompletionResponse, ProviderError> {
-        // OpenAI-compatible — reuse the OpenAI wire format against the
+        // OpenAI-compatible - reuse the OpenAI wire format against the
         // Ollama Cloud base URL.
         let openai = OpenAiAdapter {
             base_url: self.base_url.clone(),
@@ -930,7 +930,7 @@ impl EmbeddingProvider for OllamaCloudAdapter {
     }
 }
 
-/// Self-hosted OpenAI-compatible endpoint (vLLM-style) — isolation level 3
+/// Self-hosted OpenAI-compatible endpoint (vLLM-style) - isolation level 3
 /// dedicated-env deployments. Chat rides `/v1/chat/completions`,
 /// embeddings ride `/v1/embeddings` (vLLM serves the OpenAI surface).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -977,7 +977,7 @@ impl EmbeddingProvider for VllmAdapter {
     }
 }
 
-// ── Router ( — primary → fallback, timeout, bounded retries) ────────
+// ── Router ( - primary → fallback, timeout, bounded retries) ────────
 
 /// Routing entry: adapter + named model + credential resolver key.
 pub struct Route {
@@ -1089,7 +1089,7 @@ impl ProviderRouter {
     }
 
     /// Stream a completion across primary → fallback. Streaming is
-    /// not retried mid-stream — only connection-level failures before the
+    /// not retried mid-stream - only connection-level failures before the
     /// first delta fall back to the next route.
     pub async fn complete_stream(
         &self,
@@ -1125,14 +1125,14 @@ impl ProviderRouter {
 mod tests {
     use super::*;
 
-    /// Ordering invariant: OpenAI `data[i]` corresponds to `input[i]` —
+    /// Ordering invariant: OpenAI `data[i]` corresponds to `input[i]` -
     /// the adapter must return vectors in input order.
     #[tokio::test]
     async fn openai_embed_preserves_input_order() {
         // reqwest panics "No provider set" without the PQ crypto provider
         // (the test binary bypasses the shell boot).
         let _ = sentin8::tls::crypto::sentin8_pq_provider().install_default();
-        // Minimal local mock asserting order — spun up with tokio's TCP
+        // Minimal local mock asserting order - spun up with tokio's TCP
         // listener so no external endpoint is contacted.
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -1142,7 +1142,7 @@ mod tests {
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let n = stream.read(&mut buf).await.unwrap();
             let req = String::from_utf8_lossy(&buf[..n]).to_string();
-            // Inputs arrive in order a,b — the mock echoes lengths 1 then 2
+            // Inputs arrive in order a,b - the mock echoes lengths 1 then 2
             // so order is observable in vector dims.
             assert!(req.contains("\"input\":[\"a\",\"b\"]"), "body: {req}");
             let body = r#"{"data":[{"embedding":[1.0]},{"embedding":[1.0,2.0]}]}"#;

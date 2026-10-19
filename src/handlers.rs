@@ -3,10 +3,10 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! AI HTTP handlers — prompt registry, inference primitives, retrieval,
+//! AI HTTP handlers - prompt registry, inference primitives, retrieval,
 //! provider registry, traces.
 //!
-//! Authorization: `require_auth` + `require_policy` ONLY — no handler scope
+//! Authorization: `require_auth` + `require_policy` ONLY - no handler scope
 //! checks; step 5 of the authorization pipeline is the single gate.
 //! RLS: every tenant query runs inside `begin_tenant_tx` (same-connection
 //! context set).
@@ -41,9 +41,9 @@ pub struct AppState {
     /// Resolved provider routes (adapter + credential + model), keyed by
     /// provider name. Credentials are secret-reference-resolved at boot.
     pub routes: std::collections::HashMap<String, Route>,
-    /// M2M-authenticated Storage client — chunk text + trace archive.
+    /// M2M-authenticated Storage client - chunk text + trace archive.
     pub storage: sentin8_storage_sdk::client::StorageClient,
-    /// M2M-authenticated Flow client — agent workflow creation.
+    /// M2M-authenticated Flow client - agent workflow creation.
     pub flow: sentin8_flow_sdk::client::FlowClient,
 }
 
@@ -68,7 +68,7 @@ fn err_bad(msg: impl Into<String>) -> (StatusCode, String) {
 }
 
 /// Set the RLS tenant context inside a transaction. `sentin8_set_tenant_context`
-/// uses `set_config(. , true)` — transaction-local, so this MUST run inside
+/// uses `set_config(. , true)` - transaction-local, so this MUST run inside
 /// the same transaction as the domain statements.
 async fn set_rls_tx(
     tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
@@ -82,7 +82,7 @@ async fn set_rls_tx(
     Ok(())
 }
 
-/// Begin a transaction with the tenant context set — the RLS-scoped unit
+/// Begin a transaction with the tenant context set - the RLS-scoped unit
 /// for every handler (cron SEC-2.4.8 pattern).
 async fn begin_tenant_tx(
     pool: &sqlx::PgPool,
@@ -95,7 +95,7 @@ async fn begin_tenant_tx(
 
 /// Query params accepted by all env-scoped endpoints. `target_env_id` is
 /// forwarded by the BFF proxy to identify the tenant env when the caller's
-/// token carries the system env ( Fix A/D — REQUIRED, no
+/// token carries the system env ( Fix A/D - REQUIRED, no
 /// silent fallback).
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct TargetEnvQuery {
@@ -120,12 +120,12 @@ fn resolve_env_id(
         .map(uuid::Uuid::parse_str)
         .transpose()
         .map_err(|_| err_bad("token env_id is not a UUID"))?
-        .ok_or_else(|| err_bad("no tenant context — pass target_env_id"))
+        .ok_or_else(|| err_bad("no tenant context - pass target_env_id"))
 }
 
 // ── Health ─────────────────────────────────────────────────────────────────
 
-/// `GET /v1/health` — service health (custom payload; shell health suppressed).
+/// `GET /v1/health` - service health (custom payload; shell health suppressed).
 #[utoipa::path(
     get,
     operation_id = "ai.health",
@@ -217,7 +217,7 @@ fn prompt_from_row(r: &sqlx::postgres::PgRow) -> PromptRecord {
     }
 }
 
-/// `POST /v1/prompts` — create a new prompt version (immutable per version).
+/// `POST /v1/prompts` - create a new prompt version (immutable per version).
 #[utoipa::path(
     post,
     operation_id = "prompt.create",
@@ -302,7 +302,7 @@ pub async fn create_prompt(
     .fetch_one(&mut *tx)
     .await
     .map_err(err_db)?;
-    // Inbox-first event — same tx as the domain change.
+    // Inbox-first event - same tx as the domain change.
     emit_prompt_event_tx(&mut tx, env_id, &body.name, version).await?;
     tx.commit().await.map_err(err_db)?;
     Ok(Json(prompt_from_row(&row)))
@@ -353,7 +353,7 @@ fn validate_prompt(body: &UpsertPromptRequest) -> Result<(), (StatusCode, String
     Ok(())
 }
 
-/// `GET /v1/prompts` — list prompts (latest or all versions).
+/// `GET /v1/prompts` - list prompts (latest or all versions).
 #[utoipa::path(
     get,
     operation_id = "prompt.list",
@@ -402,7 +402,7 @@ pub struct PromptListQuery {
     pub all_versions: Option<bool>,
 }
 
-/// `DELETE /v1/prompts/{name}/{version}` — retire a version (never hard-delete
+/// `DELETE /v1/prompts/{name}/{version}` - retire a version (never hard-delete
 /// platform history; tenant rows may be removed).
 #[utoipa::path(
     delete,
@@ -470,13 +470,13 @@ pub async fn delete_prompt(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct InferenceRequest {
-    /// Prompt registry name — config (models, temperature, schema) resolves
+    /// Prompt registry name - config (models, temperature, schema) resolves
     /// from the named-latest/pinned version unless overridden inline.
     #[serde(default)]
     pub prompt_name: Option<String>,
     #[serde(default)]
     pub prompt_version: Option<i32>,
-    /// Inline messages (chat) — merged after the prompt's system/user text.
+    /// Inline messages (chat) - merged after the prompt's system/user text.
     #[serde(default)]
     pub messages: Vec<crate::providers::ChatMessage>,
     /// Inline override (completion-style single input).
@@ -561,7 +561,7 @@ async fn resolve_prompt(
     })
 }
 
-/// Extracted prompt fields (PgRow is not Clone — pull values eagerly).
+/// Extracted prompt fields (PgRow is not Clone - pull values eagerly).
 #[derive(Debug, Clone)]
 struct PromptResolved {
     system_text: String,
@@ -606,7 +606,7 @@ fn route_for<'s>(
     Ok((primary, fb))
 }
 
-/// `POST /v1/chat` — chat inference through the prompt registry + provider
+/// `POST /v1/chat` - chat inference through the prompt registry + provider
 /// router. Idempotency-Key honored; trace emitted.
 #[utoipa::path(
     post,
@@ -631,7 +631,7 @@ pub async fn chat(
     run_inference(state, headers, q, body, "sentin8:ai:chat:write").await
 }
 
-/// `POST /v1/completions` — completion inference. Same pipeline as
+/// `POST /v1/completions` - completion inference. Same pipeline as
 /// chat; the action scope differs.
 #[utoipa::path(
     post,
@@ -746,7 +746,7 @@ async fn run_inference(
         });
     }
     if messages.is_empty() {
-        return Err(err_bad("no messages — pass prompt_name, messages or input"));
+        return Err(err_bad("no messages - pass prompt_name, messages or input"));
     }
 
     // Model selection: prompt config → inline override.
@@ -754,7 +754,7 @@ async fn run_inference(
         .model_override
         .clone()
         .or_else(|| prompt.as_ref().map(|p| p.model_primary.clone()))
-        .ok_or_else(|| err_bad("no model — pass model_override or prompt_name"))?;
+        .ok_or_else(|| err_bad("no model - pass model_override or prompt_name"))?;
     let model_fallback = prompt.as_ref().and_then(|p| p.model_fallback.clone());
     let temperature = body
         .temperature
@@ -768,7 +768,7 @@ async fn run_inference(
 
     // Cache lookup (exact match, AI-3) BEFORE the provider call. The key
     // covers EVERYTHING that determines the response: env, model, messages,
-    // sampling params (temperature/max_tokens), and the tool set — a
+    // sampling params (temperature/max_tokens), and the tool set - a
     // near-hit would return a response generated under different params.
     // The messages payload is hashed (sha256) so the key stays bounded for
     // long conversations.
@@ -850,7 +850,7 @@ async fn run_inference(
         idempotent_replay: false,
     };
 
-    // Trace — same tx as the inference record.
+    // Trace - same tx as the inference record.
     sqlx::query(
         "INSERT INTO ai.traces (prompt_name, prompt_version, model, feature, input_tokens, output_tokens, latency_ms, cache_hit, status, subject_id, env_id) \
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'ok',$9,$10)",
@@ -870,7 +870,7 @@ async fn run_inference(
     .map_err(err_db)?;
     tx.commit().await.map_err(err_db)?;
 
-    // Stat metric emission — fire-and-forget; a Stat outage never
+    // Stat metric emission - fire-and-forget; a Stat outage never
     // blocks the response (the trace row above carries the spend).
     crate::metrics::emit_inference_metrics(
         env_id,
@@ -894,7 +894,7 @@ async fn run_inference(
         .await;
     }
     // Audit journal (AI-3): the inference lands in `ai.audit_journal` with
-    // `cache: "hit"|"miss"` — cache provenance must be auditable (a hit is a
+    // `cache: "hit"|"miss"` - cache provenance must be auditable (a hit is a
     // replay of a previous generation, not a fresh one). Same-transaction
     // discipline is relaxed here by design: the journal is best-effort (an
     // outage degrades to the trace row above, never blocks the response).
@@ -958,7 +958,7 @@ fn validate_schema(content: &str, schema: &serde_json::Value) -> Result<(), (Sta
     let parsed: serde_json::Value = serde_json::from_str(content).map_err(|e| {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
-            format!("output violates declared schema — not valid JSON: {e}"),
+            format!("output violates declared schema - not valid JSON: {e}"),
         )
     })?;
     let want = schema
@@ -978,7 +978,7 @@ fn validate_schema(content: &str, schema: &serde_json::Value) -> Result<(), (Sta
     } else {
         Err((
             StatusCode::UNPROCESSABLE_ENTITY,
-            format!("output violates declared schema — expected type '{want}'"),
+            format!("output violates declared schema - expected type '{want}'"),
         ))
     }
 }
@@ -1053,7 +1053,7 @@ pub struct EmbeddingHttpResult {
     pub dims: usize,
 }
 
-/// `POST /v1/embeddings` — batch embedding via the provider router.
+/// `POST /v1/embeddings` - batch embedding via the provider router.
 #[utoipa::path(
     post,
     operation_id = "ai.embedding",
@@ -1131,16 +1131,16 @@ pub struct ProviderRecord {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpsertProviderRequest {
-    /// 'openai' | 'anthropic' | 'ollama' (v1 set —).
+    /// 'openai' | 'anthropic' | 'ollama' (v1 set -).
     pub provider: String,
     pub base_url: String,
-    /// Secret reference — NEVER the credential material itself.
+    /// Secret reference - NEVER the credential material itself.
     pub credential_ref: String,
     #[serde(default)]
     pub models: serde_json::Value,
 }
 
-/// `GET /v1/providers` — list provider configs (credential refs only).
+/// `GET /v1/providers` - list provider configs (credential refs only).
 #[utoipa::path(
     get,
     operation_id = "provider.list",
@@ -1186,7 +1186,7 @@ pub async fn list_providers(
     ))
 }
 
-/// `PUT /v1/providers/{provider}` — upsert a provider config (secret ref only).
+/// `PUT /v1/providers/{provider}` - upsert a provider config (secret ref only).
 #[utoipa::path(
     put,
     operation_id = "provider.upsert",
@@ -1242,7 +1242,7 @@ pub async fn put_provider(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `DELETE /v1/providers/{provider}` — remove a provider config.
+/// `DELETE /v1/providers/{provider}` - remove a provider config.
 #[utoipa::path(
     delete,
     operation_id = "provider.delete",
@@ -1278,7 +1278,7 @@ pub async fn delete_provider(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ── Safety filter rules ( — env-configurable chain) ─────────────────
+// ── Safety filter rules ( - env-configurable chain) ─────────────────
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpsertFilterRequest {
@@ -1294,7 +1294,7 @@ fn default_true() -> bool {
     true
 }
 
-/// `PUT /v1/filters/{name}` — create/update an env safety filter rule
+/// `PUT /v1/filters/{name}` - create/update an env safety filter rule
 ///. The baseline prompt-injection rule is code and unaffected.
 #[utoipa::path(
     put,
@@ -1357,7 +1357,7 @@ pub struct FilterRecord {
     pub enabled: bool,
 }
 
-/// `GET /v1/filters` — list env filter rules.
+/// `GET /v1/filters` - list env filter rules.
 #[utoipa::path(
     get,
     operation_id = "ai.filter.list",
@@ -1400,7 +1400,7 @@ pub async fn list_filters(
     ))
 }
 
-/// `DELETE /v1/filters/{name}` — remove an env filter rule. The baseline
+/// `DELETE /v1/filters/{name}` - remove an env filter rule. The baseline
 /// injection rule is code and cannot be removed.
 #[utoipa::path(
     delete,
@@ -1437,16 +1437,16 @@ pub async fn delete_filter(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ── Retrieval ( — hybrid, permission-filtered) ────────
+// ── Retrieval ( - hybrid, permission-filtered) ────────
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RetrievalHttpRequest {
     pub query: String,
-    /// Caller's Shield-resolved data scope — applied as an explicit metadata
+    /// Caller's Shield-resolved data scope - applied as an explicit metadata
     /// filter IN THE QUERY (the LLM never sees out-of-scope chunks).
     #[serde(default)]
     pub data_scope: Vec<String>,
-    /// Metadata filters: `{"key": "value",. }` — each becomes
+    /// Metadata filters: `{"key": "value",. }` - each becomes
     /// `metadata->'key' == value` in the SQL (AND-composed).
     #[serde(default)]
     pub metadata_filters: serde_json::Value,
@@ -1478,7 +1478,7 @@ pub struct RetrievalHttpResult {
     pub query_embedding_ms: i64,
 }
 
-/// `POST /v1/retrieval` — hybrid retrieval: vector similarity (pgvector) +
+/// `POST /v1/retrieval` - hybrid retrieval: vector similarity (pgvector) +
 /// keyword (tsvector, when pgvector is absent) + metadata filters +
 /// permission filter from the caller's `data_scope`. Standard RLS env_id
 /// match is the backstop; the data_scope filter is defense-in-depth.
@@ -1547,7 +1547,7 @@ pub async fn retrieval(
     })?;
     let embedding_ms = started.elapsed().as_millis() as i64;
 
-    // Hybrid search — vector similarity (pgvector cosine) UNION
+    // Hybrid search - vector similarity (pgvector cosine) UNION
     // keyword relevance (tsvector over chunk_text), each branch carrying the
     // permission filter. Metadata filters compose as AND terms. RLS env_id
     // is the hard isolation barrier (same-connection context set below).
@@ -1555,7 +1555,7 @@ pub async fn retrieval(
     let scope_filter = if body.data_scope.is_empty() {
         "FALSE".to_string()
     } else {
-        // metadata->'data_scope' ?| array[. ] — any overlap grants visibility.
+        // metadata->'data_scope' ?| array[. ] - any overlap grants visibility.
         let quoted = body
             .data_scope
             .iter()
@@ -1580,7 +1580,7 @@ pub async fn retrieval(
             .join(",")
     );
     let top_k = body.top_k.clamp(1, 100);
-    // Vector branch — ordered by cosine distance; keyword branch — ordered
+    // Vector branch - ordered by cosine distance; keyword branch - ordered
     // by ts_rank over the simple-config tsvector (GIN-indexed). The union is
     // deduped on id by taking the max score per chunk id.
     let sql = format!(
@@ -1626,7 +1626,7 @@ pub async fn retrieval(
 
     // Reranker pass : when the caller (or prompt config) names a
     // rerank model, re-score the union with a provider completion that
-    // returns relevance 0. 1 per candidate. Best-effort — a reranker failure
+    // returns relevance 0. 1 per candidate. Best-effort - a reranker failure
     // returns the pre-rerank order (retrieval never hard-fails on rerank).
     if let Some(rerank_model) = &body.rerank_model {
         if let Ok(reranked) =
@@ -1775,8 +1775,8 @@ pub struct StreamChatRequest {
     pub target_env_id: Option<String>,
 }
 
-/// `POST /v1/chat/stream` — streaming chat over a chunked HTTP body
-///. NOT the SSE subscription tier — synchronous inference streams
+/// `POST /v1/chat/stream` - streaming chat over a chunked HTTP body
+///. NOT the SSE subscription tier - synchronous inference streams
 /// the response body directly (transport-tier rule).
 /// Content is emitted as newline-delimited JSON chunks; the final chunk
 /// carries the token accounting.
@@ -1812,7 +1812,7 @@ pub async fn chat_stream(
     if body.messages.is_empty() {
         return Err(err_bad("messages must not be empty"));
     }
-    // Input moderation on the stream path too ( — env rules resolve
+    // Input moderation on the stream path too ( - env rules resolve
     // inside the tenant tx; the baseline rule is always active).
     let mut tx = begin_tenant_tx(&state.pool, env_id).await?;
     let env_filter_rules = crate::safety::load_env_rules(&mut tx, env_id)
@@ -1836,7 +1836,7 @@ pub async fn chat_stream(
         .map(|(_, m)| m.to_string())
         .unwrap_or_else(|| body.model.clone());
     // Provider-side token streaming : the adapter's SSE deltas flow
-    // through the router straight into the response body — the client sees
+    // through the router straight into the response body - the client sees
     // tokens as the provider emits them. Adapters without SSE support fall
     // back to the single-shot buffered stream inside the trait default.
     let stream = state
@@ -1863,7 +1863,7 @@ pub async fn chat_stream(
             }
         })?;
 
-    // Forward loop state — accumulated output (output moderation runs on the
+    // Forward loop state - accumulated output (output moderation runs on the
     // whole text so far), token accounting, and the final model name.
     use axum::response::IntoResponse;
     use futures_util::StreamExt;
@@ -1895,7 +1895,7 @@ pub async fn chat_stream(
                         ));
                     }
                     if delta.done {
-                        // Trace + Stat on the terminal frame — same
+                        // Trace + Stat on the terminal frame - same
                         // accounting contract as buffered inference.
                         let latency_ms = started.elapsed().as_millis() as i64;
                         let trace_result = write_stream_trace(
@@ -1946,7 +1946,7 @@ pub async fn chat_stream(
 
     let response = (
         [(header::CONTENT_TYPE, "application/x-ndjson")],
-        // `mapped` already yields Result<String, String> — error frames are
+        // `mapped` already yields Result<String, String> - error frames are
         // the stream error type, rendered as ndjson by the client.
         Body::from_stream(mapped),
     )
@@ -1955,13 +1955,13 @@ pub async fn chat_stream(
 }
 
 // Thread-local accumulated output for the stream moderation buffer (one
-// request per task — the per-request closure owns the task).
+// request per task - the per-request closure owns the task).
 thread_local! {
     static ACCUM: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 /// Persist the streamed-inference trace row. Runs with the tenant
-/// context of the streaming caller — same contract as buffered traces.
+/// context of the streaming caller - same contract as buffered traces.
 #[allow(clippy::too_many_arguments)]
 async fn write_stream_trace(
     pool: &sqlx::PgPool,
@@ -1997,11 +1997,11 @@ async fn write_stream_trace(
     Ok(())
 }
 
-// ── Agent runtime ( — intent, not free action) ────────────────────────
+// ── Agent runtime ( - intent, not free action) ────────────────────────
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AgentRequest {
-    /// Prompt registry name — its `tools` array is the ALLOWLIST of actions
+    /// Prompt registry name - its `tools` array is the ALLOWLIST of actions
     /// the model may emit (mapped to Flow logics via `sentin8.ai_tools`).
     pub prompt_name: String,
     #[serde(default)]
@@ -2030,7 +2030,7 @@ pub struct AgentResponse {
     pub reason: Option<String>,
 }
 
-/// `POST /v1/agent/execute` — controlled agent execution. The model
+/// `POST /v1/agent/execute` - controlled agent execution. The model
 /// emits intent only; this endpoint maps an allowed intent to a
 /// Sentin8:Flow workflow whose domain steps proxy-back to the owning
 /// service. `requires_confirmation` intents pause in a ManualDecisionStep.
@@ -2154,7 +2154,7 @@ pub async fn agent_execute(
     req.callback_config.base_url = callback_base;
     let workflow_id = create_agent_workflow(&state, &req).await;
 
-    // 5. Audit the agent action — act chain preserved.
+    // 5. Audit the agent action - act chain preserved.
     crate::agent::audit_agent_action(
         &state.pool,
         env_id,
@@ -2175,7 +2175,7 @@ pub async fn agent_execute(
 }
 
 /// Fire the Flow workflow via the typed M2M client ( token source;
-///). Flow unavailability surfaces in the response — it never blocks
+///). Flow unavailability surfaces in the response - it never blocks
 /// the intent contract.
 async fn create_agent_workflow(
     state: &AppState,
@@ -2195,7 +2195,7 @@ pub struct UpsertBudgetRequest {
     pub enforcement: String,
 }
 
-/// `PUT /v1/budgets/{feature}` — create/update a token budget.
+/// `PUT /v1/budgets/{feature}` - create/update a token budget.
 #[utoipa::path(
     put,
     operation_id = "ai.budget.upsert",
@@ -2273,7 +2273,7 @@ async fn check_budget(
         }
     };
     let Some((cap, enforcement)) = budget else {
-        return Ok(None); // no budget configured — unmetered
+        return Ok(None); // no budget configured - unmetered
     };
     let spent: i64 = sqlx::query("SELECT sentin8.ai_monthly_tokens($1, $2)")
         .bind(env_id)
@@ -2296,7 +2296,7 @@ async fn check_budget(
     Ok(None)
 }
 
-/// `DELETE /v1/budgets/{feature}` — disable/remove a budget.
+/// `DELETE /v1/budgets/{feature}` - disable/remove a budget.
 #[utoipa::path(
     delete,
     operation_id = "ai.budget.delete",
@@ -2332,7 +2332,7 @@ pub async fn delete_budget(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ── DLQ ( — cron pattern) ───────────────────────────────────────────
+// ── DLQ ( - cron pattern) ───────────────────────────────────────────
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DlqRecord {
@@ -2343,7 +2343,7 @@ pub struct DlqRecord {
     pub created_at: String,
 }
 
-/// `GET /v1/dlq` — list dead-lettered AI jobs.
+/// `GET /v1/dlq` - list dead-lettered AI jobs.
 #[utoipa::path(
     get,
     operation_id = "ai.dlq.list",
@@ -2387,7 +2387,7 @@ pub async fn list_dlq(
     ))
 }
 
-/// `POST /v1/dlq/{id}/replay` — re-enqueue a dead-lettered job (cron
+/// `POST /v1/dlq/{id}/replay` - re-enqueue a dead-lettered job (cron
 /// republish pattern: re-insert the pending job, delete the DLQ row, emit
 /// the republished event inbox-first).
 #[utoipa::path(
@@ -2465,7 +2465,7 @@ pub struct RunEvaluationRequest {
     pub target_env_id: Option<String>,
 }
 
-/// `POST /v1/evaluations/run` — score a prompt version against a golden set
+/// `POST /v1/evaluations/run` - score a prompt version against a golden set
 ///. Each case runs a synchronous inference and checks the
 /// expectation; the aggregate score lands in `ai.evaluations`.
 #[utoipa::path(
@@ -2602,7 +2602,7 @@ pub struct RegistryDimRequest {
     pub dims: i32,
 }
 
-/// `PUT /v1/embedding-registry/{model}` — pin a model→dimension mapping for
+/// `PUT /v1/embedding-registry/{model}` - pin a model→dimension mapping for
 /// the env. Mismatched embeddings are rejected with 422.
 #[utoipa::path(
     put,
@@ -2647,7 +2647,7 @@ pub async fn pin_embedding_registry(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `GET /v1/registry` — list pinned model→dimension mappings.
+/// `GET /v1/registry` - list pinned model→dimension mappings.
 #[utoipa::path(
     get,
     operation_id = "ai.registry.list",
@@ -2689,10 +2689,10 @@ pub async fn list_embedding_registry(
 
 // ── Internal proxy-back ( cron target + agent domain step) ─────
 
-/// `POST /v1/internal/schedules/run` — Sentin8:Cron proxy-back target
+/// `POST /v1/internal/schedules/run` - Sentin8:Cron proxy-back target
 ///. Runs stale-index maintenance: re-enqueue embedding jobs for
 /// sources whose embedding is older than the freshness window. Authenticated
-/// by the cron ticker's M2M token (verified the same way as user tokens —
+/// by the cron ticker's M2M token (verified the same way as user tokens -
 /// `token_tp: m2m` principals evaluate like any other under Shield).
 #[utoipa::path(
     post,
@@ -2708,7 +2708,7 @@ pub async fn internal_schedules_run(
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let a = auth::verify_token(&state.config, &headers).await?;
-    // M2M parity — token type never bypasses policy.
+    // M2M parity - token type never bypasses policy.
     crate::policy::require_policy(
         &state.policy,
         &a,
@@ -2724,7 +2724,7 @@ pub async fn internal_schedules_run(
     // Stale-index maintenance (AI-2): when the cron fires the
     // `model_migration` schedule the sweep re-enqueues embedding jobs for
     // rows whose `model_version` trails the registry-active version for
-    // their model — the dual-read discriminator. Otherwise (freshness
+    // their model - the dual-read discriminator. Otherwise (freshness
     // schedule) rows older than the window are reported as before.
     let stale: Vec<serde_json::Value> = if schedule_type == "model_migration" {
         sqlx::query(
@@ -2778,7 +2778,7 @@ pub struct DocumentIngestRequest {
     /// Sentin8:Storage object key holding the document text.
     pub storage_key: String,
     /// Already-extracted text (extract step happens upstream or in this
-    /// request — v1 accepts the plain text; PDF extraction is a Func WASM
+    /// request - v1 accepts the plain text; PDF extraction is a Func WASM
     /// module concern).
     pub text: String,
     pub model: String,
@@ -2798,7 +2798,7 @@ fn default_chunk_size() -> usize {
     512
 }
 
-/// `POST /v1/documents/ingest` — chunk → embed → store (/).
+/// `POST /v1/documents/ingest` - chunk → embed → store (/).
 /// Chunk text lives in Sentin8:Storage (object per chunk under the document
 /// key), vectors + metadata in `ai.embeddings` with source refs.
 /// RLS env match + the caller's data_scope on chunk metadata.
@@ -2885,7 +2885,7 @@ pub async fn document_ingest(
         })?;
 
     // 3. Persist: chunk text to Sentin8:Storage (RLS env-scoped keys,
-    // M2M client —), vectors + metadata to the DB (source refs).
+    // M2M client -), vectors + metadata to the DB (source refs).
     // Storage writes are best-effort per chunk: a Storage outage degrades
     // to warn logging, the DB row carries the content_ref either way.
     let scope_meta = serde_json::json!({ "data_scope": body.data_scope });
@@ -2906,7 +2906,7 @@ pub async fn document_ingest(
             body.storage_key.trim_end_matches('/')
         );
         // Chunk text lives in Sentin8:Storage (object per chunk under the
-        // document key —); the DB row carries the object ref.
+        // document key -); the DB row carries the object ref.
         match state
             .storage
             .put(
@@ -2923,7 +2923,7 @@ pub async fn document_ingest(
                 tracing::warn!(
                     chunk = idx,
                     error = %e,
-                    "chunk Storage write failed — vector row keeps the content_ref"
+                    "chunk Storage write failed - vector row keeps the content_ref"
                 );
             }
         }
@@ -2957,7 +2957,7 @@ pub async fn document_ingest(
 
 // ── Cost report ──────────────────────────────────────────────────
 
-/// `GET /v1/costs` — per-feature/model spend rollup for the env,
+/// `GET /v1/costs` - per-feature/model spend rollup for the env,
 /// reading the AI's own trace aggregates (Stat cross-service rollup lands
 /// with the Dash integration).
 #[utoipa::path(
@@ -3015,9 +3015,9 @@ pub async fn cost_report(
 
 // ── Trace retention ──────────────────────────────────────────────
 
-/// `POST /v1/internal/traces/archive` — age out hot traces older than the
+/// `POST /v1/internal/traces/archive` - age out hot traces older than the
 /// per-env retention window to Sentin8:Storage (Stat pattern). Called by the
-/// cron proxy-back (`/v1/internal/schedules/run` maintenance) — never by
+/// cron proxy-back (`/v1/internal/schedules/run` maintenance) - never by
 /// clients directly.
 #[utoipa::path(
     post,
@@ -3047,7 +3047,7 @@ pub async fn traces_archive(
         return Err(err_bad("env_id required in body"));
     };
     // Traces older than 30 days are archived to Sentin8:Storage (one NDJSON
-    // object per env/window — the Stat aggregate pattern) before deletion
+    // object per env/window - the Stat aggregate pattern) before deletion
     // from the hot table. The Storage write is best-effort: when it fails
     // the delete is skipped (no silent data loss); the next run retries.
     let mut tx = begin_tenant_tx(&state.pool, env_id).await?;
@@ -3101,8 +3101,8 @@ pub async fn traces_archive(
             ))
         }
         Err(e) => {
-            // Keep the hot rows — retry on the next run (cron proxy-back).
-            tracing::warn!(error = %e, "trace archive Storage write failed — hot rows retained");
+            // Keep the hot rows - retry on the next run (cron proxy-back).
+            tracing::warn!(error = %e, "trace archive Storage write failed - hot rows retained");
             tx.commit().await.map_err(err_db)?;
             Ok(Json(
                 serde_json::json!({ "archived": 0, "error": "storage unavailable" }),
@@ -3138,7 +3138,7 @@ pub struct TraceListQuery {
     pub limit: Option<i64>,
 }
 
-/// `GET /v1/traces` — recent inference traces (env-scoped).
+/// `GET /v1/traces` - recent inference traces (env-scoped).
 #[utoipa::path(
     get,
     operation_id = "trace.list",

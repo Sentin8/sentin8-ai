@@ -5,7 +5,7 @@
 
 //! # ai-client
 //!
-//! Rust HTTP client for Sentin8:AI — the platform AI capability layer.
+//! Rust HTTP client for Sentin8:AI - the platform AI capability layer.
 //!
 //! Used by platform services and vertical services to consume inference
 //! primitives (completion, chat, embedding), the prompt registry, and
@@ -46,7 +46,7 @@ pub struct ChatMessage {
 /// Request body for `POST /v1/chat` / `POST /v1/completions`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InferenceRequest {
-    /// Prompt registry name — models/temperature/schema resolve from it.
+    /// Prompt registry name - models/temperature/schema resolve from it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_name: Option<String>,
     /// Prompt registry version (latest when absent).
@@ -163,7 +163,7 @@ pub struct EmbeddingResponse {
     pub dims: usize,
 }
 
-/// Request body for `POST /v1/retrieval` — hybrid permission-filtered search.
+/// Request body for `POST /v1/retrieval` - hybrid permission-filtered search.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalRequest {
     /// The natural-language query.
@@ -237,22 +237,22 @@ impl AiClient {
         format!("{}{}", self.base_url, path)
     }
 
-    /// `POST /v1/chat` — chat inference.
+    /// `POST /v1/chat` - chat inference.
     pub async fn chat(&self, req: &InferenceRequest) -> Result<InferenceResponse, AiError> {
         self.post_json("/v1/chat", req).await
     }
 
-    /// `POST /v1/completions` — completion inference.
+    /// `POST /v1/completions` - completion inference.
     pub async fn complete(&self, req: &InferenceRequest) -> Result<InferenceResponse, AiError> {
         self.post_json("/v1/completions", req).await
     }
 
-    /// `POST /v1/embeddings` — batch embeddings (input order preserved).
+    /// `POST /v1/embeddings` - batch embeddings (input order preserved).
     pub async fn embed(&self, req: &EmbeddingRequest) -> Result<EmbeddingResponse, AiError> {
         self.post_json("/v1/embeddings", req).await
     }
 
-    /// `POST /v1/retrieval` — hybrid permission-filtered retrieval.
+    /// `POST /v1/retrieval` - hybrid permission-filtered retrieval.
     pub async fn retrieve(&self, req: &RetrievalRequest) -> Result<RetrievalResponse, AiError> {
         self.post_json("/v1/retrieval", req).await
     }

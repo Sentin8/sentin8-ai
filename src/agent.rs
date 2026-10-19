@@ -5,7 +5,7 @@
 
 //! Controlled agent runtime.
 //!
-//! The model emits **intent** — never executes. An agent request resolves
+//! The model emits **intent** - never executes. An agent request resolves
 //! the prompt's tool allowlist, runs inference to obtain a structured
 //! intent, then maps the intent to a Sentin8:Flow workflow whose domain
 //! steps proxy-back to the owning service (the exact Func/Flow/Cron
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Structured intent emitted by the model. The model has NO
-/// execution surface — this contract is the only output shape accepted.
+/// execution surface - this contract is the only output shape accepted.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct AgentIntent {
     pub action: String,
@@ -31,7 +31,7 @@ pub struct AgentIntent {
 }
 
 /// Parse the model output into an intent. The content must be exactly one
-/// JSON object conforming to [`AgentIntent`] — anything else is rejected
+/// JSON object conforming to [`AgentIntent`] - anything else is rejected
 /// (fail-closed: no free-text execution).
 pub fn parse_intent(content: &str) -> Result<AgentIntent, String> {
     let trimmed = content.trim();
@@ -81,7 +81,7 @@ pub fn resolve_tool<'a>(
 }
 
 /// Build the Sentin8:Flow workflow request for an allowed intent.
-/// Agent tasks ARE Flow workflows — resume/repair semantics come free, no
+/// Agent tasks ARE Flow workflows - resume/repair semantics come free, no
 /// new state store.
 pub fn agent_workflow_request(
     tool: &ToolDecl,
@@ -141,7 +141,7 @@ pub fn agent_workflow_request(
     }
 }
 
-/// Best-effort audit event for an executed agent action — the
+/// Best-effort audit event for an executed agent action - the
 /// func-service pattern: direct insert with tenant context on the same
 /// connection, never blocks the response path.
 pub async fn audit_agent_action(
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(a.action, "cancel_subscription");
         let b = parse_intent("```json\n{\"action\":\"lookup\",\"params\":{}}\n```").unwrap();
         assert_eq!(b.action, "lookup");
-        // Free text is rejected — the model cannot smuggle instructions.
+        // Free text is rejected - the model cannot smuggle instructions.
         assert!(parse_intent("I will now cancel the subscription").is_err());
         assert!(parse_intent("{\"action\":\"\"}").is_err());
     }

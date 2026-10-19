@@ -1,4 +1,4 @@
-# Design Doc: Sentin8:AI — Platform AI Capability Layer
+# Design Doc: Sentin8:AI - Platform AI Capability Layer
 
 ## 1. Summary
 
@@ -8,7 +8,7 @@ routed over a pluggable model-provider layer, permission-filtered hybrid
 retrieval, a controlled agent runtime that maps model intent onto
 Sentin8:Flow workflows, token budgets with cost gating, and full
 observability (traces, Stat metrics, cost rollups). Provider credentials
-are secret references resolved at call time — never stored material.
+are secret references resolved at call time - never stored material.
 
 ## 2. Motivation
 
@@ -75,57 +75,57 @@ graph TD
     end
 ```
 
-- **Authorization** — `require_auth` + `require_policy` ONLY. No handler
+- **Authorization** - `require_auth` + `require_policy` ONLY. No handler
   scope checks: step 5 of the authorization pipeline (Shield, roles
   resolved live) is the single gate; the JWT `scope` claim is a
   pre-filter, never the decision. M2M parity: token type never bypasses
   policy.
-- **RLS** — every tenant query runs inside `begin_tenant_tx`
+- **RLS** - every tenant query runs inside `begin_tenant_tx`
   (transaction-local context on the same connection). Cross-env access
-  requires the caller's token to carry the target env — required, never
+  requires the caller's token to carry the target env - required, never
   defaulted.
-- **Events** — the service writes local outbox rows in the same
+- **Events** - the service writes local outbox rows in the same
   transaction as domain changes (prompt updates fire
   `sentin8:ai:prompt:updated`) and consumes its own stream families as a
   direct consumer (no Sentin8:Func for first-class reactions):
   embedding jobs, summary/classification jobs, and the document pipeline
   (`document:uploaded` from ANY vertical).
-- **Delegation** — Flow receives agent workflows; Cron receives trace
+- **Delegation** - Flow receives agent workflows; Cron receives trace
   archive + stale re-embedding schedules; Storage holds chunk text +
   trace archives; Stat holds the metric spend. The owning service
   resolves the tool's target and forwards the authorized action.
 
 ## 4. Key Traits and Data Structures
 
-- **`CompletionProvider` / `EmbeddingProvider`** — the adapter boundary.
+- **`CompletionProvider` / `EmbeddingProvider`** - the adapter boundary.
   One impl per provider (`OpenAiAdapter`, `AnthropicAdapter`,
   `OllamaCloudAdapter`); they consume a plain `reqwest::Client` so tests
   pin a local mock server, never a real endpoint.
-- **`ProviderRouter` + `Route`** — primary→fallback chain per prompt,
+- **`ProviderRouter` + `Route`** - primary→fallback chain per prompt,
   per-call timeouts, bounded retries; routes resolved at boot from
   `ai.providers` (registry rows keyed by provider name, credential as
   secret reference).
-- **`ProviderCredential`** — bearer API key or `x-api-key` header,
+- **`ProviderCredential`** - bearer API key or `x-api-key` header,
   resolved per call from a secret reference; never logged, never
   persisted.
-- **`AgentIntent`** — the structured model contract (`action`, `params`,
+- **`AgentIntent`** - the structured model contract (`action`, `params`,
   `requires_confirmation`); the only output shape accepted from a model
   (fail-closed: free-text execution is rejected).
-- **`EmbeddingJobEnvelope`** — self-contained event (payload
+- **`EmbeddingJobEnvelope`** - self-contained event (payload
   completeness): job id, env, model, chunks `(content_ref, index, text)`,
-  caller data scope — the consumer never calls back for more data.
-- **`AppState`** — config, pool, Shield engine + shared admin state,
+  caller data scope - the consumer never calls back for more data.
+- **`AppState`** - config, pool, Shield engine + shared admin state,
   provider router + resolved routes, M2M Storage/Flow/Cron clients, the
   shared Stat emitter, and the Valkey-backed exact-match cache.
-- **Idempotency-Key** — honored on completion/chat; a completed response
+- **Idempotency-Key** - honored on completion/chat; a completed response
   replays for a seen key.
 
 ## 5. Rationale, Trade-offs, and Alternatives
 
 - **Intent-not-execution agent runtime.** The model never executes; it
   emits a structured intent that must resolve to a declared tool on the
-  prompt's allowlist. Alternatives — tool-calling loops with execution
-  sandboxes, or free-text commands — either give the model an execution
+  prompt's allowlist. Alternatives - tool-calling loops with execution
+  sandboxes, or free-text commands - either give the model an execution
   surface or require parsing prose into actions. A single JSON intent
   contract is auditable, confirmable (`ManualDecisionStep` pause), and
   re-authorized at execution time (approval applies the approver's
@@ -148,15 +148,15 @@ graph TD
   would pay the provider first and dispute later.
 - **Exact-match response cache.** Deterministic prompts (same model +
   input + sampling params + tools) hit a Valkey cache before any provider
-  call; the key is a bounded sha256 prompt-hash. Only exact match —
-  no semantic caching — because semantic cache hits are indistinguishable
+  call; the key is a bounded sha256 prompt-hash. Only exact match -
+  no semantic caching - because semantic cache hits are indistinguishable
   from hallucinations in audit. Every inference is journalled to
   `ai.audit_journal` with `cache: "hit"|"miss"` so provenance is auditable.
 - **Hybrid retrieval (pgvector cosine ∪ keyword index) with
   permission-filtered results.** Vector similarity alone misses exact
   identifiers (account numbers, error codes); keyword alone misses
   paraphrase. Results are permission-filtered by the caller's data scope
-  before return — a retrieval system that leaks across tenant scopes is
+  before return - a retrieval system that leaks across tenant scopes is
   worse than no retrieval. Dimensions are registered per env;
   mismatched embeddings are rejected (422) rather than compared across
   incompatible spaces.
@@ -177,7 +177,7 @@ graph TD
   not return an explicit cost.
 - **Prompt versioning with named-latest resolution.** Prompts are
   versioned; "latest per name" resolves at call time. Deletion is a
-  *retire* — platform history rows are never hard-deleted; tenant rows
+  *retire* - platform history rows are never hard-deleted; tenant rows
   may be removed.
 - **Traces as the audit substrate.** Every inference writes a trace row
   (same transaction as the record): request, provider route, token
@@ -193,7 +193,7 @@ graph TD
 ## 6. Internal Implementation & Invariants (Private Design)
 
 - **Invariants:**
-  - Step 5 (Shield) is the ONLY gate — no handler scope checks; the
+  - Step 5 (Shield) is the ONLY gate - no handler scope checks; the
     enforced scope-mirror policy set over LIVE effective scopes denies
     fail-closed.
   - Provider credentials exist only as resolved secrets for the duration
@@ -204,7 +204,7 @@ graph TD
   - Streamed responses moderate the accumulated buffer before deltas
     reach the client; a mid-stream moderation failure aborts the stream.
   - Schema enforcement: when a prompt declares an output schema,
-    non-conforming responses are rejected — downstream consumers
+    non-conforming responses are rejected - downstream consumers
     (evaluation workflows) rely on shape stability.
   - Embedding jobs are idempotent on `job_id`; completed jobs skip on
     replay; failures retry with backoff then land in `ai.dlq` for
@@ -219,16 +219,16 @@ graph TD
   flag, PQ provider, config, capped pool, PG18 check, state binding,
   OpenAPI merge, middleware stack, and the PQ-TLS listener; the binary
   supplies registration data, state, and routes. Shield boot loads ONE
-  engine — the service consumes it (booting a second engine would
+  engine - the service consumes it (booting a second engine would
   duplicate the bus consumer + DCR registration and split the cache with
   the admin API).
 - **Outbound M2M.** Proxy-back calls (Flow/Cron/Storage) use a
   DCR-registered cert-bound client (`register_or_load_m2m_client`,
   persisted cert files, mTLS token URL); the static `SENTIN8_AI_TOKEN`
   is the dev fallback only. DCR failure degrades to the fallback token
-  with a warn — never a boot failure.
+  with a warn - never a boot failure.
 - **Provider registry ownership.** The system env (sys/ops) owns the
-  provider registry — platform configuration, shared read-only; the env
+  provider registry - platform configuration, shared read-only; the env
   id is resolved by slug join (never hardcoded).
 
 ## 7. Unresolved Questions / Future Designs
@@ -243,7 +243,7 @@ graph TD
   it).
 - Per-token-stream cost accounting emits `usage.estimated: true` when derived
   from the terminal-frame approximation.
-- Cross-region provider routing is deferred deliberately — residency is a
+- Cross-region provider routing is deferred deliberately - residency is a
   deployment-topology concern (env→provider mapping), not a service concern.
 
 ---

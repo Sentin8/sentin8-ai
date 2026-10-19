@@ -8,7 +8,7 @@
 -- (`ai.embedding_registry`) pins the ACTIVE (model, dims) per env and
 -- carries the version; rows written by a given generation stamp the same
 -- version. The Cron sweep re-enqueues embedding jobs for rows whose
--- version trails the registry-active one — pgvector's typmod makes
+-- version trails the registry-active one - pgvector's typmod makes
 -- per-model dimensions a REINDEX concern (greenfield: re-run init with
 -- the target model pinned); the version column is the dual-read
 -- discriminator that tells the sweep which rows are stale.
@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_embeddings_model_version
 ALTER TABLE ai.embedding_registry
     ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT 'v1';
 
--- Sweep helper (SECURITY DEFINER — the cron proxy-back runs context-less
+-- Sweep helper (SECURITY DEFINER - the cron proxy-back runs context-less
 -- and FORCE RLS hides rows without context; returns only ids + versions,
 -- no embedding content).
 CREATE OR REPLACE FUNCTION ai.ai_stale_model_versions(

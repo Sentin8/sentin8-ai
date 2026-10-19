@@ -3,10 +3,10 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! AI inference metric emission (SDD §2.6 — MemBus transport).
+//! AI inference metric emission (SDD §2.6 - MemBus transport).
 //!
 //! Token counts, derived cost, latency, and cache hits publish as metric
-//! frames on the shared telemetry path —
+//! frames on the shared telemetry path -
 //! `sentin8::shield::stat_emit::emit_metric_event` (MemBus
 //! `stat:telemetry` Pub/Sub, consumed by Stat's worker;
 //! fire-and-forget, log-only on failure). The shared emitter is
@@ -15,7 +15,7 @@
 
 use uuid::Uuid;
 
-/// Cost per 1M tokens (USD) — a coarse normalization used when the provider
+/// Cost per 1M tokens (USD) - a coarse normalization used when the provider
 /// does not return an explicit cost. The trace row keeps the exact token
 /// counts; Stat carries this derived estimate (per-env price tables are a
 /// FinOps refinement, not a gate).
@@ -30,7 +30,7 @@ pub fn estimate_cost_usd(input_tokens: u64, output_tokens: u64) -> f64 {
         + (output_tokens as f64 / 1_000_000.0) * DEFAULT_OUTPUT_USD_PER_MTOK
 }
 
-/// Emit the inference metric set for one completed call (fire-and-forget —
+/// Emit the inference metric set for one completed call (fire-and-forget -
 /// no-op until the shell boot initialized the shared emitter; a disabled
 /// emitter means the trace row still carries the spend).
 pub fn emit_inference_metrics(
@@ -91,7 +91,7 @@ pub fn emit_inference_metrics(
 mod tests {
     use super::*;
 
-    /// Cost estimation is pure math — stable across restarts (dashboard
+    /// Cost estimation is pure math - stable across restarts (dashboard
     /// rollups depend on it).
     #[test]
     fn cost_estimate_matches_per_mtok_rates() {
@@ -103,7 +103,7 @@ mod tests {
     }
 
     /// Emission before the shell boot initialized the shared emitter is a
-    /// silent no-op (no panic) — every path degrades to log-only.
+    /// silent no-op (no panic) - every path degrades to log-only.
     #[test]
     fn emit_before_init_is_noop() {
         emit_inference_metrics(Uuid::nil(), "subj", "f", "openai/m", 10, 5, 42, false);

@@ -7,7 +7,7 @@
 //!
 //! Direct consumers (no Sentin8:Func): the service subscribes to its own
 //! stream families via `bus-client` (`consume` + `POST /v1/ack`) and handles
-//! the event in-process — the preferred path when the reaction is a
+//! the event in-process - the preferred path when the reaction is a
 //! first-class concern of the owning service (architecture-principles
 //! "event-driven execution").
 //!
@@ -20,7 +20,7 @@ pub const AI_STREAM_FAMILY: &str = "ai";
 /// Consumer group for the embedding-job direct consumer.
 pub const EMBEDDING_CONSUMER_GROUP: &str = "sentin8-ai-embedding";
 
-/// Envelope for `sentin8:ai:embedding:job` — self-contained (payload
+/// Envelope for `sentin8:ai:embedding:job` - self-contained (payload
 /// completeness): the consumer never calls back for more data.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EmbeddingJobEnvelope {
@@ -84,7 +84,7 @@ pub fn spawn_embedding_consumer(
                                         // Non-ack → retry via claim timeout; DLQ after
                                         // the relay's retry budget.
                                         tracing::error!(job = %job.job_id, error = %e, "embedding job FAILED; will retry");
-                                        continue; // skip ack — redelivery
+                                        continue; // skip ack - redelivery
                                     }
                                 }
                             }
@@ -214,13 +214,13 @@ pub const SUMMARY_CONSUMER_GROUP: &str = "sentin8-ai-summary";
 pub const DOCUMENT_CONSUMER_GROUP: &str = "sentin8-ai-document";
 
 /// A fire-and-forget completion job (summary/classification). The event
-/// carries everything needed — no callback required (payload completeness).
+/// carries everything needed - no callback required (payload completeness).
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct CompletionJobEnvelope {
     pub job_id: String,
     pub env_id: uuid::Uuid,
     pub model: String,
-    /// Prompt registry name to resolve (optional — inline input otherwise).
+    /// Prompt registry name to resolve (optional - inline input otherwise).
     #[serde(default)]
     pub prompt_name: Option<String>,
     pub input: String,
@@ -237,7 +237,7 @@ fn default_job_feature() -> String {
     "async".into()
 }
 
-/// Spawn the summary/classification consumer — same direct-consumer
+/// Spawn the summary/classification consumer - same direct-consumer
 /// pattern as the embedding loop, idempotent on `job_id`.
 pub fn spawn_summary_consumer(
     pool: sqlx::PgPool,
@@ -388,7 +388,7 @@ async fn process_completion_job(
             .execute(&mut *tx)
             .await
             .map_err(|e| format!("rls: {e}"))?;
-        // Direct query (resolve_prompt needs &mut tx — do it inline here).
+        // Direct query (resolve_prompt needs &mut tx - do it inline here).
         let row = sqlx::query(
             "SELECT system_text, user_text, model_primary, temperature FROM ai.prompts              WHERE env_id = $1 AND name = $2 AND (status = 'pinned' OR status = 'active')              ORDER BY CASE status WHEN 'pinned' THEN 0 ELSE 1 END, version DESC LIMIT 1",
         )
@@ -434,7 +434,7 @@ async fn process_completion_job(
     Ok(resp.content)
 }
 
-// ── Document pipeline consumer ( — Flow-triggered path) ─────────────
+// ── Document pipeline consumer ( - Flow-triggered path) ─────────────
 
 /// Event envelope for the document pipeline (`sentin8:{vertical}:document:u
 // ploaded` → trigger kind=direct → this consumer). Self-contained per the
@@ -484,7 +484,7 @@ pub fn spawn_document_consumer(
                     for msg in &resp.messages {
                         // Any `*:document:uploaded` event (verticals emit their
                         // own colon-named types; the platform never hardcodes
-                        // a vertical's event names —).
+                        // a vertical's event names -).
                         if !msg.event_type.ends_with(":document:uploaded") {
                             let _ = bus_client
                                 .ack(AI_STREAM_FAMILY, DOCUMENT_CONSUMER_GROUP, &msg.message_id)
@@ -551,7 +551,7 @@ pub fn spawn_document_consumer(
 }
 
 /// Document pipeline step: Storage fetch → chunk → embed → persist
-/// (extract happens upstream — the event carries the extracted-text key).
+/// (extract happens upstream - the event carries the extracted-text key).
 async fn process_document_job(
     pool: &sqlx::PgPool,
     routes: &std::collections::HashMap<String, crate::providers::Route>,

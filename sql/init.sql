@@ -3,21 +3,21 @@
 -- SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 -- SPDX-License-Identifier: Apache-2.0
 
--- Sentin8:AI — platform AI capability layer tables.
+-- Sentin8:AI - platform AI capability layer tables.
 -- Prompt registry, vector store (pgvector), inference traces, provider
--- registry (secret references only — never plaintext credentials).
+-- registry (secret references only - never plaintext credentials).
 -- Design: sentin8/design/sentin8-sentin8-ai-technical-design.md §6.
 
 CREATE SCHEMA IF NOT EXISTS ai;
 
--- pgvector (AI design §6 — hybrid retrieval). The extension is created by
+-- pgvector (AI design §6 - hybrid retrieval). The extension is created by
 -- the pgvector/pgvector:pg18 image; guarded so plain postgres:18 dev setups
 -- degrade gracefully instead of failing the whole migration.
 DO $$
 BEGIN
     CREATE EXTENSION IF NOT EXISTS vector;
 EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'pgvector unavailable — vector columns skipped (install pgvector to enable RAG)';
+    RAISE NOTICE 'pgvector unavailable - vector columns skipped (install pgvector to enable RAG)';
 END $$;
 
 CREATE TABLE IF NOT EXISTS ai.prompts (
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS ai.providers (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider        TEXT NOT NULL,                     -- 'openai' | 'anthropic' | 'ollama'
     base_url        TEXT NOT NULL,
-    -- Secret REFERENCES only (AI design §7) — the credential material lives
+    -- Secret REFERENCES only (AI design §7) - the credential material lives
     -- in Sentin8:Secrets; these columns name it, never store it.
     credential_ref  TEXT NOT NULL,
     models          JSONB NOT NULL DEFAULT '[]',       -- catalog validated at registration
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS ai.traces (
 CREATE INDEX IF NOT EXISTS idx_ai_traces_env ON ai.traces (env_id);
 CREATE INDEX IF NOT EXISTS idx_ai_traces_env_time ON ai.traces (env_id, created_at DESC);
 
--- ── Row-Level Security (mandatory hardening — principles §4.3d) ────────────
+-- ── Row-Level Security (mandatory hardening - principles §4.3d) ────────────
 
 ALTER TABLE ai.prompts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai.prompts FORCE ROW LEVEL SECURITY;
@@ -104,7 +104,7 @@ ALTER TABLE ai.embeddings FORCE ROW LEVEL SECURITY;
 ALTER TABLE ai.traces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai.traces FORCE ROW LEVEL SECURITY;
 
--- Standard tenant match policy on every AI table (isolation only — never
+-- Standard tenant match policy on every AI table (isolation only - never
 -- business logic; db-design §7.0 binding rule).
 DROP POLICY IF EXISTS ai_prompts_select ON ai.prompts;
 CREATE POLICY ai_prompts_select ON ai.prompts
@@ -155,7 +155,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
     ai.prompts, ai.providers, ai.embeddings, ai.traces
     TO sentin8_ai_service;
 
--- ── 31.5.1 — per-env embedding dimension registry (vector(1536) above is
+-- ── 31.5.1 - per-env embedding dimension registry (vector(1536) above is
 -- the default; the registry lets an env pin a different model/dimension).
 CREATE TABLE IF NOT EXISTS ai.embedding_registry (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS ai.embedding_registry (
     UNIQUE (env_id, model, dims)
 );
 
--- ── 31.6.4 — DLQ for failed embedding jobs (cron DLQ pattern).
+-- ── 31.6.4 - DLQ for failed embedding jobs (cron DLQ pattern).
 CREATE TABLE IF NOT EXISTS ai.dlq (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_type        TEXT NOT NULL,                     -- 'embedding' | 'summary' | 'classification'
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS ai.dlq (
 CREATE INDEX IF NOT EXISTS idx_ai_dlq_env ON ai.dlq (env_id);
 CREATE INDEX IF NOT EXISTS idx_ai_dlq_type ON ai.dlq (env_id, job_type);
 
--- ── 31.8.2 — per-env/feature token budgets (no Sys plan table exists —
+-- ── 31.8.2 - per-env/feature token budgets (no Sys plan table exists -
 -- research verified; budgets are AI-owned tenant configuration).
 CREATE TABLE IF NOT EXISTS ai.budgets (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS ai.budgets (
     UNIQUE (env_id, feature)
 );
 
--- ── 31.9.3 — evaluation runs (golden-set scoring per prompt version).
+-- ── 31.9.3 - evaluation runs (golden-set scoring per prompt version).
 CREATE TABLE IF NOT EXISTS ai.evaluations (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     prompt_name     TEXT NOT NULL,
@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS ai.evaluations (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_evaluations_env ON ai.evaluations (env_id, prompt_name);
 
--- ── 31.9.2/31.9.3 helpers — monthly token spend (reads traces) and RLS.
+-- ── 31.9.2/31.9.3 helpers - monthly token spend (reads traces) and RLS.
 
 -- Monthly spend for budget checks: tokens consumed in the current month.
 CREATE OR REPLACE FUNCTION ai.ai_monthly_tokens(p_env_id UUID, p_feature TEXT)
@@ -284,15 +284,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
     TO sentin8_ai_service;
 GRANT EXECUTE ON FUNCTION ai.ai_monthly_tokens(UUID, TEXT) TO sentin8_ai_service;
 
--- 31.5.2 — keyword search over chunk text (hybrid retrieval). The text is
+-- 31.5.2 - keyword search over chunk text (hybrid retrieval). The text is
 -- stored so tsvector queries can run alongside the vector path.
 ALTER TABLE ai.embeddings ADD COLUMN IF NOT EXISTS chunk_text TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_ai_embeddings_chunk_text
     ON ai.embeddings USING gin (to_tsvector('simple', chunk_text));
 
--- 31.3.4 — env-configurable safety filter rules (Shield-gated admin API).
+-- 31.3.4 - env-configurable safety filter rules (Shield-gated admin API).
 -- Rules run in `sentin8:ai` BEFORE the provider call (input stage) and
--- BEFORE the response returns (output stage) — AI design §4.10. The
+-- BEFORE the response returns (output stage) - AI design §4.10. The
 -- baseline injection rule is code, always active, and never configurable.
 CREATE TABLE IF NOT EXISTS ai.filters (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -323,16 +323,16 @@ CREATE POLICY ai_filters_delete ON ai.filters
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ai.filters TO sentin8_ai_service;
 
--- 31.8.1 — AI telemetry property in Sentin8:Stat (token/cost/latency/cache
+-- 31.8.1 - AI telemetry property in Sentin8:Stat (token/cost/latency/cache
 -- metric envelopes attribute to `{env_id, feature, model}` here). The stat
 -- platform seed only creates properties for the services it knows; the AI
 -- property is seeded here where the AI tables are born (vertical-seed
--- pattern — stat init.sql NOTE on vertical telemetry).
+-- pattern - stat init.sql NOTE on vertical telemetry).
 INSERT INTO stat.properties (env_id, name, slug, timezone, retention_days)
 VALUES ('00000000-0000-0000-0000-000000000002', 'Sentin8:AI Platform Telemetry', 'ai', 'UTC', 90)
 ON CONFLICT DO NOTHING;
 
--- HNSW index for fast cosine search (31.5.1). Guarded — requires pgvector.
+-- HNSW index for fast cosine search (31.5.1). Guarded - requires pgvector.
 DO $$
 BEGIN
     CREATE INDEX IF NOT EXISTS idx_ai_embeddings_hnsw ON ai.embeddings
@@ -419,7 +419,7 @@ CREATE POLICY audit_journal_dml ON ai.audit_journal
     WITH CHECK (sentin8_context_initialized() AND env_id = sentin8_current_env_id());
 
 
--- ── Schema grants (service-owned — the 2026-10-03 ownership pass) ─────
+-- ── Schema grants (service-owned - the 2026-10-03 ownership pass) ─────
 -- This service's own schema: USAGE for its role (platform.sql no longer
 -- seeds per-service USAGE; the service declares it here).
 GRANT USAGE ON SCHEMA ai TO sentin8_ai_service;

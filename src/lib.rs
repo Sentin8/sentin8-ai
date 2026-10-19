@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! Library surface for Sentin8:AI — tests import service internals through
+//! Library surface for Sentin8:AI - tests import service internals through
 //! this crate name (`sentin8_ai_server`), mirroring the post/cron pattern.
 
 pub mod agent;
@@ -27,7 +27,7 @@ pub mod test_support {
         let org_id = uuid::Uuid::new_v4();
         let env_id = uuid::Uuid::new_v4();
         // Organizations/envs live in the platform schema; insert with the
-        // service role (GRANTed SELECT-only) may fail — fall back to direct
+        // service role (GRANTed SELECT-only) may fail - fall back to direct
         // superuser-style inserts via the same pool (tests connect with a
         // role that owns the seeded rows via security definer helpers).
         let mut tx = pool.begin().await.unwrap();

@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! RFW admin UI for Sentin8:AI ( /) — mirrors the cron/func
+//! RFW admin UI for Sentin8:AI ( /) - mirrors the cron/func
 //! pattern. The service owns its admin pages; the dash is a pure rendering
 //! host (architecture-).
 
@@ -21,7 +21,7 @@ use sqlx::Row;
 
 use crate::handlers::{AppState, TargetEnvQuery};
 
-/// `GET /v1/admin/ui/{page}` — RFW definition for the page.
+/// `GET /v1/admin/ui/{page}` - RFW definition for the page.
 #[utoipa::path(
     get,
     operation_id = "ai.admin.ui",
@@ -38,7 +38,7 @@ pub async fn get_admin_ui(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let _a = auth::verify_token(&state.config, &headers).await?;
     // Step 5 (Shield) is enforced on the data endpoints; the definitions are
-    // static — verification here only (cheap), enforcement on data reads.
+    // static - verification here only (cheap), enforcement on data reads.
     let def = match page.as_str() {
         "prompts" => AdminPage::new("Prompt Registry")
             .action(link("New Prompt Version", "prompts/new"))
@@ -184,7 +184,7 @@ pub async fn get_admin_ui(
                 vec![],
             ))
             .build(),
-        // ── Policy Studio — shared page
+        // ── Policy Studio - shared page
         // constructors; the guard guarantees `Some` ( dispatch).
         p if sentin8::rfw::policy_page("sentin8:ai", p).is_some() => {
             sentin8::rfw::policy_page("sentin8:ai", p)
@@ -200,8 +200,8 @@ pub async fn get_admin_ui(
     ))
 }
 
-/// `GET /v1/admin/{resource}` — RFW data endpoint (env-scoped, RLS on the
-/// same connection; `target_env_id` REQUIRED — Fix A).
+/// `GET /v1/admin/{resource}` - RFW data endpoint (env-scoped, RLS on the
+/// same connection; `target_env_id` REQUIRED - Fix A).
 #[utoipa::path(
     get,
     operation_id = "ai.admin.data",
@@ -231,7 +231,7 @@ pub async fn get_admin_data(
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                "missing target_env_id — must specify the env to administer".to_string(),
+                "missing target_env_id - must specify the env to administer".to_string(),
             )
         })?;
     let mut conn = state

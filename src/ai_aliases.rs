@@ -3,11 +3,11 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! Annotated RFW alias wrappers (Dash 28.14 — the RFW renderer is
+//! Annotated RFW alias wrappers (Dash 28.14 - the RFW renderer is
 //! POST-only) for handlers bound at more than one real path. One annotated
 //! handler = one path in the OpenAPI spec (utoipa resolves one
 //! `__path_` struct per annotated fn), so a second BINDING needs a second
-//! annotated wrapper — same handler body, alias path, same gates
+//! annotated wrapper - same handler body, alias path, same gates
 //! (OAPEC design §2 rule 3).
 
 use crate::handlers::AppState;
@@ -15,7 +15,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 
 
-/// `POST /v1/budgets/{feature}/delete` — RFW alias of
+/// `POST /v1/budgets/{feature}/delete` - RFW alias of
 /// `DELETE /v1/budgets/{feature}`.
 #[utoipa::path(
     post,
@@ -39,7 +39,7 @@ pub async fn budget_delete(
     crate::handlers::delete_budget(State(state), headers, Query(q), Path(feature)).await
 }
 
-/// `POST /v1/filters/{name}/delete` — RFW alias of
+/// `POST /v1/filters/{name}/delete` - RFW alias of
 /// `DELETE /v1/filters/{name}`.
 #[utoipa::path(
     post,

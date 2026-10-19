@@ -6,7 +6,7 @@
 //! Safety filters + PII deny-list.
 //!
 //! The filter chain runs in `sentin8:ai` BEFORE the provider call (input
-//! moderation) and BEFORE the response returns (output moderation) —
+//! moderation) and BEFORE the response returns (output moderation) -
 //! Tenant-configurable per env via `ai.filters`
 //! (admin API is Shield-gated). The PII deny-list mirrors the Stat ingest
 //! deny-list (`services/stat/src/types.rs`).
@@ -14,7 +14,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-/// Default PII deny-list keys — mirrors Stat's ingest deny-list. Applied to
+/// Default PII deny-list keys - mirrors Stat's ingest deny-list. Applied to
 /// any payload we persist (trace metadata, prompt bodies).
 pub const PII_DENY_LIST: &[&str] = &[
     "email",
@@ -128,7 +128,7 @@ pub fn run_output_filters(rules: &[FilterRule], text: &str) -> Result<(), String
 }
 
 /// Load the env-configurable filter rules inside the given RLS
-/// transaction — the caller sets the tenant context on the same connection
+/// transaction - the caller sets the tenant context on the same connection
 ///. The baseline injection rule is NOT here: it is code,
 /// always active, and evaluated first in `run_input_filters`.
 pub async fn load_env_rules(
@@ -206,7 +206,7 @@ mod tests {
         assert!(run_input_filters(&rules, "the secret is 42").is_ok());
     }
 
-    /// Empty env rules must behave identically to the no-rules path — the
+    /// Empty env rules must behave identically to the no-rules path - the
     /// baseline injection rule still blocks regardless.
     #[test]
     fn empty_env_rules_keep_baseline() {

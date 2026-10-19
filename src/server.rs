@@ -24,14 +24,14 @@ pub async fn build_state(
     // ── Sentin8:Policy (shell-owned boot): the shell's
     // boot step 8 already loaded the engine (refuse-to-start on invalid
     // policy text), init'd the shared step-5 deps, spawned the hot-reload
-    // consumer and the stat emitter. Services only CONSUME the engine —
+    // consumer and the stat emitter. Services only CONSUME the engine -
     // booting a second one here would duplicate the bus consumer + DCR
     // registration and risk a cache split with the admin API.
     let policy_engine = core.admin.policy.clone();
 
-    // ── Provider routes — resolve from the registry at boot.
+    // ── Provider routes - resolve from the registry at boot.
     // Credentials are secret REFERENCES resolved via the shared
-    // sentin8-secrets resolver chain ( — service/env/file backends;
+    // sentin8-secrets resolver chain ( - service/env/file backends;
     // never plaintext in rows).
     let mut routes = std::collections::HashMap::new();
     let rows = sqlx::query(
@@ -95,9 +95,9 @@ pub async fn build_state(
         }
     }
 
-    // ── Async AI jobs — direct embedding consumer (the `ai`
+    // ── Async AI jobs - direct embedding consumer (the `ai`
     // workload CERTIFICATE is the identity; Bus's TLS layer authenticates
-    // the handshake — no DCR, no token). The mint retries while Acme comes
+    // the handshake - no DCR, no token). The mint retries while Acme comes
     // up (boot window); the consumers' reconnect loops cover a late
     // identity.
     let bus_client = loop {
@@ -116,10 +116,10 @@ pub async fn build_state(
         }
     };
 
-    // ── Outbound identity (auth DESIGN §4.3f) — the
+    // ── Outbound identity (auth DESIGN §4.3f) - the
     // `ai-proxy` CERTIFICATE is the identity: ensure it once (load-or-mint
     // from Acme) and build the cert-presenting Storage + Flow clients.
-    // Every failure degrades to a plain-transport warn — never a boot
+    // Every failure degrades to a plain-transport warn - never a boot
     // refusal (the platform may not be up yet).
     let ai_cert = sentin8::auth::m2m::ensure_workload_certificate(
         &config.sentin8_auth_issuer,
@@ -128,12 +128,12 @@ pub async fn build_state(
     )
     .await;
     if let Err(e) = &ai_cert {
-        tracing::warn!(error = %e, "AI outbound certificate not ready — Storage/Flow degrade to plain transports until next boot");
+        tracing::warn!(error = %e, "AI outbound certificate not ready - Storage/Flow degrade to plain transports until next boot");
     }
 
     let cfg_platform = sentin8::config::Sentin8Config::from_env();
 
-    // Cert-presenting Storage client — chunk writes + trace archive.
+    // Cert-presenting Storage client - chunk writes + trace archive.
     let storage_client = match &ai_cert {
         Ok(cert) => sentin8_storage_sdk::client::StorageClient::with_workload_identity(
             cfg_platform.sentin8_storage_url(),
@@ -142,13 +142,13 @@ pub async fn build_state(
             &cert.key_path,
         )
         .unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "AI Storage client transport build failed — dev plain fallback");
+            tracing::warn!(error = %e, "AI Storage client transport build failed - dev plain fallback");
             sentin8_storage_sdk::client::StorageClient::new_dev_plain(cfg_platform.sentin8_storage_url())
         }),
         Err(_) => sentin8_storage_sdk::client::StorageClient::new_dev_plain(cfg_platform.sentin8_storage_url()),
     };
 
-    // Cert-presenting Flow client — agent workflow creation.
+    // Cert-presenting Flow client - agent workflow creation.
     let flow_client = match &ai_cert {
         Ok(cert) => sentin8_flow_sdk::client::FlowClient::with_workload_identity(
             cfg_platform.sentin8_flow_url(),
@@ -157,7 +157,7 @@ pub async fn build_state(
             &cert.key_path,
         )
         .unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "AI Flow client transport build failed — dev plain fallback");
+            tracing::warn!(error = %e, "AI Flow client transport build failed - dev plain fallback");
             sentin8_flow_sdk::client::FlowClient::new_dev_plain(cfg_platform.sentin8_flow_url())
         }),
         Err(_) => sentin8_flow_sdk::client::FlowClient::new_dev_plain(cfg_platform.sentin8_flow_url()),
@@ -197,7 +197,7 @@ pub async fn build_state(
         routes.clone(),
         std::sync::Arc::clone(&router_arc),
     );
-    // Document pipeline — document.uploaded → Storage fetch →
+    // Document pipeline - document.uploaded → Storage fetch →
     // chunk → embed → persist.
     crate::jobs::spawn_document_consumer(
         core.pool.clone(),
@@ -206,19 +206,19 @@ pub async fn build_state(
         router_arc,
         storage_for_jobs,
     );
-    // Maintenance schedules (SDD §2.4) are declarative — the
+    // Maintenance schedules (SDD §2.4) are declarative - the
     // registration's `schedules` section provisions them at enroll
     // time; ai makes no boot-time cron calls.
     Ok(state)
 }
 
-/// The platform system env (sys/ops) owns the provider registry — it is
+/// The platform system env (sys/ops) owns the provider registry - it is
 /// platform configuration, not tenant data. The registry row for the system
 /// env is shared read-only config; per-env overrides land later.
 async fn sentin8_system_env_id(pool: &sqlx::PgPool) -> uuid::Uuid {
     // sys/ops env ids are fixed UUIDs seeded by the platform bootstrap
     // (sentin8_sys_environments, org 'sys' env 'ops'). Read the slug pair
-    // rather than hardcoding. The join column is `org_id` — the long
+    // rather than hardcoding. The join column is `org_id` - the long
     // `organization_id` form was dropped from the sys schema per the
     // tenant conventions ().
     match sqlx::query_scalar(
@@ -231,16 +231,16 @@ async fn sentin8_system_env_id(pool: &sqlx::PgPool) -> uuid::Uuid {
     {
         Ok(Some(id)) => id,
         Ok(None) => {
-            // Bootstrap not yet applied — fall back to the nil UUID so boot
+            // Bootstrap not yet applied - fall back to the nil UUID so boot
             // proceeds (no providers configured) instead of refusing to start.
-            tracing::warn!("sys/ops env not found — provider registry empty");
+            tracing::warn!("sys/ops env not found - provider registry empty");
             uuid::Uuid::nil()
         }
         // A real SQL failure must be LOUD, not silently treated as
         // "bootstrap not applied" (the old `.ok` swallowed the
         // wrong-column error and mislabeled it as a missing env).
         Err(e) => {
-            tracing::error!(error = %e, "sys/ops env lookup failed — provider registry empty");
+            tracing::error!(error = %e, "sys/ops env lookup failed - provider registry empty");
             uuid::Uuid::nil()
         }
     }
@@ -249,7 +249,7 @@ async fn sentin8_system_env_id(pool: &sqlx::PgPool) -> uuid::Uuid {
 /// Add this service's routes onto the shell-provided router. The shell
 /// owns the boot sequence, state binding, OpenAPI merge and the standard
 /// middleware stack; this adds ONLY routes (including the service's own
-/// `/v1/health` — custom payload).
+/// `/v1/health` - custom payload).
 pub fn routes(
     router: axum::Router<crate::handlers::AppState>,
 ) -> axum::Router<crate::handlers::AppState> {
@@ -302,9 +302,9 @@ pub fn routes(
         )
         // ── Document pipeline (/4) ──────────────────────────────────
         .route("/v1/documents/ingest", post(handlers::document_ingest))
-        // ── Safety filters ( — env-configurable rules) ─────────────
+        // ── Safety filters ( - env-configurable rules) ─────────────
         // (The PUT /v1/filters/{name} form is the upsert; the collection
-        // POST bound here previously was unreachable-by-contract — the
+        // POST bound here previously was unreachable-by-contract - the
         // handler's Path(name) can never extract on a segment-less route
         // (axum rejects with 500) and no consumer exists. Deleted per
         // OAPEC: a served route must be a working contract.)
@@ -330,7 +330,7 @@ pub fn routes(
             "/v1/internal/schedules/run",
             post(handlers::internal_schedules_run),
         )
-        // ── Admin UI (RFW — /) ───────────────────────────────
+        // ── Admin UI (RFW - /) ───────────────────────────────
         .route("/v1/admin/ui/{*page}", get(crate::admin_ui::get_admin_ui))
         .route("/v1/admin/{resource}", get(crate::admin_ui::get_admin_data))
         // ── Traces ───────────────────────────────────────────────
@@ -381,7 +381,7 @@ pub fn routes(
         )
 }
 
-/// Shared policy-admin surface accessor — the shared
+/// Shared policy-admin surface accessor - the shared
 /// handlers extract this service's admin state via [`HasPolicyAdmin`].
 impl sentin8::shield::admin::HasPolicyAdmin for AppState {
     fn policy_admin(&self) -> &sentin8::shield::admin::SharedAdminState {

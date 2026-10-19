@@ -5,7 +5,7 @@
 
 //! Sentin8:Policy integration for AI.
 //!
-//! Thin re-export of the shared bridge (`sentin8::shield::runtime`) —
+//! Thin re-export of the shared bridge (`sentin8::shield::runtime`) -
 //! the consolidated implementation every service uses. Nothing is
 //! service-specific here beyond the colon service_type.
 //!

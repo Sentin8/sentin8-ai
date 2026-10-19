@@ -92,12 +92,12 @@ fn openapi_spec() -> serde_json::Value {
 
 /// Default declarative policy sets (Sentin8:Policy design /):
 /// action-granular scope permits over the LIVE effective scope set. Seeded
-/// `origin='platform'`, `mode='enforced'` ( — step 5 is
+/// `origin='platform'`, `mode='enforced'` ( - step 5 is
 /// the only gate; shadow is the emergency one-UPDATE rollback lever only).
 const POLICIES: &[PolicySetDecl] = &[
     PolicySetDecl {
         policy_set_name: "scope-mirror",
-        description: "Action-granular scope permits for sentin8:ai over the LIVE effective scope set. Enforced — step 5 is the only gate.",
+        description: "Action-granular scope permits for sentin8:ai over the LIVE effective scope set. Enforced - step 5 is the only gate.",
         policies: "permit(principal, action == Action::\"sentin8:ai:completion:write\", resource) when { principal.scopes.contains(\"sentin8:ai:completion:write\") };\npermit(principal, action == Action::\"sentin8:ai:chat:write\", resource) when { principal.scopes.contains(\"sentin8:ai:chat:write\") };\npermit(principal, action == Action::\"sentin8:ai:embedding:write\", resource) when { principal.scopes.contains(\"sentin8:ai:embedding:write\") };\npermit(principal, action == Action::\"sentin8:ai:retrieval:read\", resource) when { principal.scopes.contains(\"sentin8:ai:retrieval:read\") };\npermit(principal, action == Action::\"sentin8:ai:prompt:read\", resource) when { principal.scopes.contains(\"sentin8:ai:prompt:read\") || principal.scopes.contains(\"sentin8:ai:prompt:write\") };\npermit(principal, action == Action::\"sentin8:ai:prompt:write\", resource) when { principal.scopes.contains(\"sentin8:ai:prompt:write\") };",
         schema: None,
         mode: "enforced",
@@ -105,7 +105,7 @@ const POLICIES: &[PolicySetDecl] = &[
     },
 ];
 
-/// Default ReBAC relation tuples (design) — none declared by this
+/// Default ReBAC relation tuples (design) - none declared by this
 /// service today; env admins author their own graph via the admin API.
 const RELATIONS: &[RelationDecl] = &[];
 
@@ -121,7 +121,7 @@ fn event_triggers() -> &'static [sentin8::registration::EventTriggerDecl] {
     static TRIGGERS: OnceLock<&'static [sentin8::registration::EventTriggerDecl]> = OnceLock::new();
     TRIGGERS.get_or_init(|| {
         let decls = vec![
-            // Document pipeline — document.uploaded events from ANY
+            // Document pipeline - document.uploaded events from ANY
             // vertical route to the AI direct consumer (stream family `ai`).
             sentin8::registration::EventTriggerDecl {
                 event_type: "document:uploaded",
@@ -129,7 +129,7 @@ fn event_triggers() -> &'static [sentin8::registration::EventTriggerDecl] {
                 consumer_group: crate::jobs::DOCUMENT_CONSUMER_GROUP,
                 retry: serde_json::json!({ "max_retries": 3, "backoff": "exponential" }),
             },
-            // Cron maintenance — trace archiving + stale re-embedding.
+            // Cron maintenance - trace archiving + stale re-embedding.
             sentin8::registration::EventTriggerDecl {
                 event_type: "sentin8:ai:trace:archive",
                 target: serde_json::json!({ "kind": "cron", "schedule_type": "ai-trace-archive" }),
@@ -152,7 +152,7 @@ fn event_triggers() -> &'static [sentin8::registration::EventTriggerDecl] {
 /// With `--section=<name>`, outputs only that section as a standalone JSON value.
 /// M2M DCR workload grants (self-registration): this
 /// service's own `certless:<workload>` rows, upserted by `vertical enroll`.
-/// The static auth seed is retired — this declaration is the ONLY
+/// The static auth seed is retired - this declaration is the ONLY
 /// provisioning path (architecture- "DCR is dynamic").
 /// Cover BOTH the full-identity `-policy` spelling (policy_bus_client) and
 /// the bare `{short}-policy` spelling (stat_emit); the gate's superset
@@ -171,7 +171,7 @@ const M2M_GRANTS: &[sentin8::registration::M2mGrant] = &[
         ],
     },
     // `ai` registers the Bus SSE consumer too (`server.rs` builds the bus
-    // client directly with the short tag) — mirror `sentin8:ai`'s scope set.
+    // client directly with the short tag) - mirror `sentin8:ai`'s scope set.
     sentin8::registration::M2mGrant {
         workload: "ai",
         scopes: &["sentin8:bus:consume", "sentin8:stat:measure"],
@@ -199,7 +199,7 @@ const M2M_GRANTS: &[sentin8::registration::M2mGrant] = &[
         workload: "ai-policy",
         scopes: &["sentin8:bus:consume", "sentin8:stat:measure"],
     },
-    // TLS-RLS-4 (design/sentin8-vertical-data-plane-contract.md §VDC.7): the database-free HostContextResolver’s resolve workload — cache miss calls Sys `GET /v1/resolve/hostname`.
+    // TLS-RLS-4 (design/sentin8-vertical-data-plane-contract.md §VDC.7): the database-free HostContextResolver’s resolve workload - cache miss calls Sys `GET /v1/resolve/hostname`.
     sentin8::registration::M2mGrant {
         workload: "sentin8-ai-tls",
         scopes: &["sentin8:sys:instances:read"],
@@ -249,7 +249,7 @@ pub fn print(section: Option<String>) -> anyhow::Result<()> {
         policies: POLICIES,
         relations: RELATIONS,
         event_triggers: event_triggers(),
-        // Declarative maintenance schedules (SDD §2.4) — provisioned by
+        // Declarative maintenance schedules (SDD §2.4) - provisioned by
         // `vertical enroll`, fired by cron against the internal proxy-back
         // endpoint (no boot-time cron calls). Weekly trace archive
         // (Sundays 03:00) + nightly stale re-embedding (daily 04:00).

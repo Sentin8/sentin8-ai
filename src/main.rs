@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! Sentin8 AI — platform AI capability layer.
+//! Sentin8 AI - platform AI capability layer.
 //!
 //! Boot runs on the platform `sentin8-shell` crate: registration flag,
 //! PQ provider, config, capped pool, PG18 check, state binding, OpenAPI

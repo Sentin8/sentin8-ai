@@ -3,14 +3,14 @@
 // SPDX-FileCopyrightText: Copyright Contributors to the Sentin8:AI
 // SPDX-License-Identifier: Apache-2.0
 
-//! Integration tests for Sentin8:AI — token verification, policy gate,
+//! Integration tests for Sentin8:AI - token verification, policy gate,
 //! registration parity, and DB-backed prompt/provider CRUD (runtime-skip).
 //!
 //! Pattern: runtime-skip, NEVER `#[ignore]`.
 
 use sentin8_ai_server::providers::{CompletionProvider, EmbeddingProvider};
 
-/// Runtime-skip DB pool (NOBYPASSRLS `sentin8_ai_service` role — the
+/// Runtime-skip DB pool (NOBYPASSRLS `sentin8_ai_service` role - the
 /// superuser would bypass RLS and void every isolation assertion,
 /// ).
 async fn db_pool() -> Option<sqlx::PgPool> {
@@ -19,7 +19,7 @@ async fn db_pool() -> Option<sqlx::PgPool> {
     match sqlx::postgres::PgPool::connect(&url).await {
         Ok(p) => Some(p),
         Err(e) => {
-            eprintln!("skipping DB-backed ai tests — PostgreSQL unreachable: {e}");
+            eprintln!("skipping DB-backed ai tests - PostgreSQL unreachable: {e}");
             None
         }
     }
@@ -36,7 +36,7 @@ fn registration_prints_service_identity() {
 }
 
 fn crate_registration_service_type() -> &'static str {
-    // Mirrors registration.rs — kept in sync via the parity test below.
+    // Mirrors registration.rs - kept in sync via the parity test below.
     "sentin8:ai"
 }
 
@@ -63,7 +63,7 @@ fn registration_declares_expected_admin_scopes() {
 }
 
 fn crate_registration_admin_scopes_str() -> String {
-    // Concatenation of the AdminScope tuples declared in registration.rs —
+    // Concatenation of the AdminScope tuples declared in registration.rs -
     // kept in sync by this test failing on drift.
     "sentin8:ai:completion:write sentin8:ai:chat:write sentin8:ai:embedding:write sentin8:ai:retrieval:read sentin8:ai:prompt:read sentin8:ai:prompt:write sentin8:ai:policy:read sentin8:ai:policy:write".to_string()
 }
@@ -73,12 +73,12 @@ fn crate_registration_admin_scopes_str() -> String {
 #[test]
 fn policy_engine_boots_for_ai_identity() {
     // : the shim engine is test-only; the identity contract lives in
-    // the shared runtime factory — same call the shell's boot step 8 runs.
+    // the shared runtime factory - same call the shell's boot step 8 runs.
     let engine = sentin8::shield::runtime::engine_for("sentin8:ai");
     assert_eq!(engine.service(), "sentin8:ai");
 }
 
-// ── Provider adapters (mock HTTP — no external endpoints) ─
+// ── Provider adapters (mock HTTP - no external endpoints) ─
 
 #[tokio::test]
 async fn openai_chat_mock_roundtrip() {
@@ -189,7 +189,7 @@ async fn ollama_cloud_embed_mock_roundtrip() {
     install_pq();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    // Mock server (detached — the response below is asserted by the adapter
+    // Mock server (detached - the response below is asserted by the adapter
     // call completing; the task's join handle is unused).
     let _server = tokio::spawn(async move {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -228,7 +228,7 @@ async fn ollama_cloud_embed_mock_roundtrip() {
 #[tokio::test]
 async fn provider_429_is_transient_terminal_401() {
     install_pq();
-    // Classification drives retry/failover — assert via the mock.
+    // Classification drives retry/failover - assert via the mock.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
@@ -462,7 +462,7 @@ async fn db_rls_isolates_prompts_per_env() {
             .unwrap();
         tx.commit().await.unwrap();
     }
-    // Read as env_b — must see zero rows (RLS backstop).
+    // Read as env_b - must see zero rows (RLS backstop).
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("SELECT sentin8_set_tenant_context($1)")
         .bind(env_b)
@@ -479,7 +479,7 @@ async fn db_rls_isolates_prompts_per_env() {
     sentin8_ai_server::test_support::cleanup_env(&pool, env_b).await;
 }
 
-// ── — env-configurable filter rules ─
+// ── - env-configurable filter rules ─
 
 #[tokio::test]
 async fn db_filter_rules_load_per_env() {
@@ -518,7 +518,7 @@ async fn db_filter_rules_load_per_env() {
     sentin8_ai_server::test_support::cleanup_env(&pool, env_id).await;
 }
 
-// ── — hybrid retrieval data model (chunk_text + keyword index) ─
+// ── - hybrid retrieval data model (chunk_text + keyword index) ─
 
 #[tokio::test]
 async fn db_chunk_text_persists_for_keyword_search() {
@@ -555,13 +555,13 @@ async fn db_chunk_text_persists_for_keyword_search() {
     sentin8_ai_server::test_support::cleanup_env(&pool, env_id).await;
 }
 
-// ── — secret-reference credential resolution ─
+// ── - secret-reference credential resolution ─
 
 #[tokio::test]
 async fn credential_resolves_from_secret_ref() {
     install_pq();
     // env backend: SENTIN8_AI_PROVIDER_KEY_<SCREAMING_PATH>. The credential
-    // is exercised end-to-end through a local mock — the Authorization
+    // is exercised end-to-end through a local mock - the Authorization
     // header must carry the resolved key (no value logged or leaked).
     std::env::set_var("SENTIN8_AI_PROVIDER_KEY_OPENAI_MAIN", "sk-test-123");
     let cred = sentin8_ai_server::config::credential_for("env://openai/main").await;
@@ -611,7 +611,7 @@ async fn credential_resolves_from_secret_ref() {
 }
 
 /// The Sentin8 HTTP stack (rustls + Graviola) requires the PQ crypto provider
-/// installed once per process — the test binary bypasses the shell boot.
+/// installed once per process - the test binary bypasses the shell boot.
 fn install_pq() {
     use std::sync::Once;
     static ONCE: Once = Once::new();

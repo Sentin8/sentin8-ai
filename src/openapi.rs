@@ -95,7 +95,7 @@ use crate::handlers;
     security(),
     tags(
         (name = "policy", description = "Shield policy administration (shared surface)"),
-        (name = "ai", description = "Sentin8:AI — prompt registry, inference primitives, retrieval, providers, traces"),
+        (name = "ai", description = "Sentin8:AI - prompt registry, inference primitives, retrieval, providers, traces"),
     ),
 )]
 pub struct AiOpenApi;
