@@ -2698,15 +2698,15 @@ pub async fn list_embedding_registry(
     post,
     operation_id = "ai.internal.schedules.run",
     path = "/v1/internal/schedules/run",
-    request_body = serde_json::Value,
-    responses((status = 200, description = "Maintenance run completed")),
+    request_body = ScheduleRunRequest,
+    responses((status = 200, description = "Maintenance run completed", body = ScheduleRunResponse)),
     tag = "ai",
 )]
 pub async fn internal_schedules_run(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(body): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    Json(body): Json<ScheduleRunRequest>,
+) -> Result<Json<ScheduleRunResponse>, (StatusCode, String)> {
     let a = auth::verify_token(&state.config, &headers).await?;
     // M2M parity - token type never bypasses policy.
     crate::policy::require_policy(
@@ -2716,17 +2716,15 @@ pub async fn internal_schedules_run(
         sentin8::shield::EvalTarget::new("sentin8:ai:embedding:write"),
     )
     .await?;
-    let schedule_type = body["schedule_type"].as_str().unwrap_or("unknown");
-    let env_id = body["env_id"]
-        .as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok());
+    let schedule_type = if body.schedule_type.is_empty() { "unknown" } else { body.schedule_type.as_str() };
+    let env_id = body.env_id;
     let mut tx = begin_tenant_tx(&state.pool, env_id.unwrap_or_default()).await?;
     // Stale-index maintenance (AI-2): when the cron fires the
     // `model_migration` schedule the sweep re-enqueues embedding jobs for
     // rows whose `model_version` trails the registry-active version for
     // their model - the dual-read discriminator. Otherwise (freshness
     // schedule) rows older than the window are reported as before.
-    let stale: Vec<serde_json::Value> = if schedule_type == "model_migration" {
+    let stale: Vec<StaleEmbedding> = if schedule_type == "model_migration" {
         sqlx::query(
             r#"SELECT e.source_id, e.model
                  FROM ai.embeddings e
@@ -2742,12 +2740,10 @@ pub async fn internal_schedules_run(
         .await
         .map_err(err_db)?
         .iter()
-        .map(|r| {
-            serde_json::json!({
-                "source_id": r.get::<Option<String>, _>("source_id"),
-                "model": r.get::<String, _>("model"),
-                "reason": "model_version_trails_registry",
-            })
+        .map(|r| StaleEmbedding {
+            source_id: r.get::<Option<String>, _>("source_id"),
+            model: r.get::<String, _>("model"),
+            reason: Some("model_version_trails_registry".to_string()),
         })
         .collect()
     } else {
@@ -2759,19 +2755,81 @@ pub async fn internal_schedules_run(
         .await
         .map_err(err_db)?
         .iter()
-        .map(|r| serde_json::json!({ "source_id": r.get::<Option<String>, _>("source_id"), "model": r.get::<String, _>("model") }))
+        .map(|r| StaleEmbedding {
+            source_id: r.get::<Option<String>, _>("source_id"),
+            model: r.get::<String, _>("model"),
+            reason: None,
+        })
         .collect()
     };
     tx.commit().await.map_err(err_db)?;
     tracing::info!(stale = stale.len(), "ai maintenance run");
-    Ok(Json(serde_json::json!({
-        "schedule_type": body["schedule_type"],
-        "stale_sources": stale,
-        "status": "completed",
-    })))
+    Ok(Json(ScheduleRunResponse {
+        schedule_type: serde_json::json!(schedule_type),
+        stale_sources: stale,
+        status: "completed".to_string(),
+    }))
 }
 
 // ── Document pipeline (/) ─────────────────────────────────────
+
+
+// ── Maintenance proxy-back contracts (OAPEC-9 typed) ─────────────────────
+
+/// `POST /v1/internal/schedules/run` request (cron proxy-back).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ScheduleRunRequest {
+    /// The schedule type that fired (`model_migration`/`freshness`).
+    #[serde(default)]
+    pub schedule_type: String,
+    /// The env to sweep (absent = whole registry).
+    #[serde(default)]
+    pub env_id: Option<Uuid>,
+}
+
+/// One stale embedding in the maintenance report.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct StaleEmbedding {
+    /// The stale source id.
+    #[serde(default)]
+    pub source_id: Option<String>,
+    /// The embedding model.
+    pub model: String,
+    /// Why the row is stale.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// `POST /v1/internal/schedules/run` reply.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ScheduleRunResponse {
+    /// The schedule that ran.
+    pub schedule_type: serde_json::Value,
+    /// Stale sources the sweep found.
+    pub stale_sources: Vec<StaleEmbedding>,
+    /// Always `completed`.
+    pub status: String,
+}
+
+/// `POST /v1/internal/traces/archive` request.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TraceArchiveRequest {
+    /// The env whose traces are archived.
+    pub env_id: Uuid,
+}
+
+/// `POST /v1/internal/traces/archive` reply.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TraceArchiveResponse {
+    /// Rows moved to Storage (0 on a retained run).
+    pub archived: i64,
+    /// The NDJSON object key (successful run only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_key: Option<String>,
+    /// Failure note (retained run only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct DocumentIngestRequest {
@@ -3023,15 +3081,15 @@ pub async fn cost_report(
     post,
     operation_id = "ai.traces.archive",
     path = "/v1/internal/traces/archive",
-    request_body = serde_json::Value,
-    responses((status = 200, description = "Archive run completed")),
+    request_body = TraceArchiveRequest,
+    responses((status = 200, description = "Archive run completed", body = TraceArchiveResponse)),
     tag = "ai",
 )]
 pub async fn traces_archive(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(body): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    Json(archive_req): Json<TraceArchiveRequest>,
+) -> Result<Json<TraceArchiveResponse>, (StatusCode, String)> {
     let a = auth::verify_token(&state.config, &headers).await?;
     crate::policy::require_policy(
         &state.policy,
@@ -3040,12 +3098,7 @@ pub async fn traces_archive(
         sentin8::shield::EvalTarget::new("sentin8:ai:prompt:write"),
     )
     .await?;
-    let env_id = body["env_id"]
-        .as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok());
-    let Some(env_id) = env_id else {
-        return Err(err_bad("env_id required in body"));
-    };
+    let env_id = archive_req.env_id;
     // Traces older than 30 days are archived to Sentin8:Storage (one NDJSON
     // object per env/window - the Stat aggregate pattern) before deletion
     // from the hot table. The Storage write is best-effort: when it fails
@@ -3064,7 +3117,11 @@ pub async fn traces_archive(
     .collect();
     if aged.is_empty() {
         tx.commit().await.map_err(err_db)?;
-        return Ok(Json(serde_json::json!({ "archived": 0 })));
+        return Ok(Json(TraceArchiveResponse {
+            archived: 0,
+            storage_key: None,
+            error: None,
+        }));
     }
     let mut body_ndjson = String::new();
     for row in &aged {
@@ -3096,17 +3153,21 @@ pub async fn traces_archive(
             .map_err(err_db)?
             .rows_affected();
             tx.commit().await.map_err(err_db)?;
-            Ok(Json(
-                serde_json::json!({ "archived": n, "storage_key": archive_key }),
-            ))
+            Ok(Json(TraceArchiveResponse {
+                archived: n as i64,
+                storage_key: Some(archive_key),
+                error: None,
+            }))
         }
         Err(e) => {
             // Keep the hot rows - retry on the next run (cron proxy-back).
             tracing::warn!(error = %e, "trace archive Storage write failed - hot rows retained");
             tx.commit().await.map_err(err_db)?;
-            Ok(Json(
-                serde_json::json!({ "archived": 0, "error": "storage unavailable" }),
-            ))
+            Ok(Json(TraceArchiveResponse {
+                archived: 0,
+                storage_key: None,
+                error: Some("storage unavailable".to_string()),
+            }))
         }
     }
 }
