@@ -2716,7 +2716,11 @@ pub async fn internal_schedules_run(
         sentin8::shield::EvalTarget::new("sentin8:ai:embedding:write"),
     )
     .await?;
-    let schedule_type = if body.schedule_type.is_empty() { "unknown" } else { body.schedule_type.as_str() };
+    let schedule_type = if body.schedule_type.is_empty() {
+        "unknown"
+    } else {
+        body.schedule_type.as_str()
+    };
     let env_id = body.env_id;
     let mut tx = begin_tenant_tx(&state.pool, env_id.unwrap_or_default()).await?;
     // Stale-index maintenance (AI-2): when the cron fires the
@@ -2772,7 +2776,6 @@ pub async fn internal_schedules_run(
 }
 
 // ── Document pipeline (/) ─────────────────────────────────────
-
 
 // ── Maintenance proxy-back contracts (OAPEC-9 typed) ─────────────────────
 

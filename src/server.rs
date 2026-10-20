@@ -308,16 +308,16 @@ pub fn routes(
         // handler's Path(name) can never extract on a segment-less route
         // (axum rejects with 500) and no consumer exists. Deleted per
         // OAPEC: a served route must be a working contract.)
-        .route(
-            "/v1/filters",
-            get(handlers::list_filters),
-        )
+        .route("/v1/filters", get(handlers::list_filters))
         .route(
             "/v1/filters/{name}",
             put(handlers::put_filter).delete(handlers::delete_filter),
         )
         // POST alias for RFW row_action_post (renderer only supports POST)
-        .route("/v1/filters/{name}/delete", post(crate::ai_aliases::filter_delete))
+        .route(
+            "/v1/filters/{name}/delete",
+            post(crate::ai_aliases::filter_delete),
+        )
         // ── Cost report ──────────────────────────────────────────
         .route("/v1/costs", get(handlers::cost_report))
         // ── Trace retention (internal) ────────────────────────────

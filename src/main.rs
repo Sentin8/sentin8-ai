@@ -11,8 +11,8 @@
 //! binary supplies only its registration data, state and routes.
 
 mod admin_ui;
-mod ai_aliases;
 mod agent;
+mod ai_aliases;
 #[allow(dead_code)]
 #[allow(dead_code)]
 mod auth;

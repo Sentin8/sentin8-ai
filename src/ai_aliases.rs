@@ -14,7 +14,6 @@ use crate::handlers::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 
-
 /// `POST /v1/budgets/{feature}/delete` - RFW alias of
 /// `DELETE /v1/budgets/{feature}`.
 #[utoipa::path(
