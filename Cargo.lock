@@ -4164,7 +4164,7 @@ dependencies = [
 [[package]]
 name = "sentin8-flow-client"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.6#c460a513c99a2b73fbe1d4b1114dddd1cf4aa01d"
+source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.7#be9ab18b1ac85ca90f3bd940be4146cee8d28256"
 dependencies = [
  "reqwest 0.12.28",
  "sentin8-flow-contracts",
@@ -4180,7 +4180,7 @@ dependencies = [
 [[package]]
 name = "sentin8-flow-contracts"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.6#c460a513c99a2b73fbe1d4b1114dddd1cf4aa01d"
+source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.7#be9ab18b1ac85ca90f3bd940be4146cee8d28256"
 dependencies = [
  "chrono",
  "serde",
@@ -4192,7 +4192,7 @@ dependencies = [
 [[package]]
 name = "sentin8-flow-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.6#c460a513c99a2b73fbe1d4b1114dddd1cf4aa01d"
+source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v0.6.7#be9ab18b1ac85ca90f3bd940be4146cee8d28256"
 dependencies = [
  "sentin8-flow-client",
  "sentin8-flow-contracts",
