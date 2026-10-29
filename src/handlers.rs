@@ -2777,7 +2777,7 @@ pub async fn internal_schedules_run(
 
 // ── Document pipeline (/) ─────────────────────────────────────
 
-// ── Maintenance proxy-back contracts (OAPEC-9 typed) ─────────────────────
+// ── Maintenance proxy-back contracts (typed) ─────────────────────
 
 /// `POST /v1/internal/schedules/run` request (cron proxy-back).
 #[derive(Debug, Deserialize, ToSchema)]
