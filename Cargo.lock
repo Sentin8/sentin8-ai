@@ -4175,8 +4175,8 @@ dependencies = [
 
 [[package]]
 name = "sentin8-cron-client"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.10#b706f1c19ac0ee3670ae8e849448b168a06957e5"
+version = "1.0.0"
+source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v1.0.0#eb137fc2e1ede85dd50ff73550fc056860d76a31"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -4190,8 +4190,8 @@ dependencies = [
 
 [[package]]
 name = "sentin8-cron-contracts"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.10#b706f1c19ac0ee3670ae8e849448b168a06957e5"
+version = "1.0.0"
+source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v1.0.0#eb137fc2e1ede85dd50ff73550fc056860d76a31"
 dependencies = [
  "chrono",
  "serde",
@@ -4201,8 +4201,8 @@ dependencies = [
 
 [[package]]
 name = "sentin8-cron-sdk"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v0.6.10#b706f1c19ac0ee3670ae8e849448b168a06957e5"
+version = "1.0.0"
+source = "git+https://github.com/Sentin8/sentin8-cron?tag=cron-sdk-v1.0.0#eb137fc2e1ede85dd50ff73550fc056860d76a31"
 dependencies = [
  "sentin8-cron-client",
  "sentin8-cron-contracts",
