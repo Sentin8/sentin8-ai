@@ -3989,7 +3989,7 @@ dependencies = [
 
 [[package]]
 name = "sentin8-ai"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4026,7 +4026,7 @@ dependencies = [
 
 [[package]]
 name = "sentin8-ai-client"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -4042,7 +4042,7 @@ dependencies = [
 
 [[package]]
 name = "sentin8-ai-sdk"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sentin8-ai-client",
 ]
