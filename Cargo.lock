@@ -4591,13 +4591,13 @@ dependencies = [
 
 [[package]]
 name = "sentin8-secrets"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-secrets?tag=secrets-sdk-v0.4.2#f0ee60cd104987d795c3e3e6bd862fc11a49fe62"
+version = "1.0.0"
+source = "git+https://github.com/Sentin8/sentin8-secrets?tag=secrets-sdk-v1.0.0#ef5ad79bf5e6b118168f340de562bd2b0c1f8a52"
 dependencies = [
  "async-trait",
  "reqwest 0.12.28",
- "sentin8-m2m 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.23)",
- "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.23)",
+ "sentin8-m2m 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.25)",
+ "sentin8-middleware 0.1.0 (git+https://github.com/Sentin8/sentin8-sdk?tag=sdk-v0.6.25)",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4607,8 +4607,8 @@ dependencies = [
 
 [[package]]
 name = "sentin8-secrets-sdk"
-version = "0.1.0"
-source = "git+https://github.com/Sentin8/sentin8-secrets?tag=secrets-sdk-v0.4.2#f0ee60cd104987d795c3e3e6bd862fc11a49fe62"
+version = "1.0.0"
+source = "git+https://github.com/Sentin8/sentin8-secrets?tag=secrets-sdk-v1.0.0#ef5ad79bf5e6b118168f340de562bd2b0c1f8a52"
 dependencies = [
  "sentin8-secrets",
 ]
