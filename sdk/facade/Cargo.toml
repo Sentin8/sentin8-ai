@@ -5,7 +5,7 @@
 
 [package]
 name = "sentin8-ai-sdk"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "sentin8-ai-sdk - per-service SDK mini-facade (client + contracts re-exports; SDD 3.1)."
 
