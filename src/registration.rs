@@ -86,9 +86,6 @@ const SQL_1_INIT: &str = include_str!("../sql/init.sql");
 const SQL_2_EMBEDDING_MODEL_VERSION: &str = include_str!("../sql/v2_embedding_model_version.sql");
 
 /// Serialize the utoipa OpenAPI spec (used for the `all` and `openapi` sections).
-fn openapi_spec() -> serde_json::Value {
-    serde_json::to_value(crate::openapi::AiOpenApi::openapi()).unwrap_or(serde_json::Value::Null)
-}
 
 /// Default declarative policy sets (Sentin8:Policy design /):
 /// action-granular scope permits over the LIVE effective scope set. Seeded
@@ -207,6 +204,13 @@ const M2M_GRANTS: &[sentin8::registration::M2mGrant] = &[
 ];
 
 pub fn print(section: Option<String>) -> anyhow::Result<()> {
+        // The utoipa dump is a BINARY-crate static (main.rs): the embedded test
+    // harnesses that compose this file cannot see it and never print a spec.
+    #[cfg(not(test))]
+    let dump: fn() -> serde_json::Value = crate::OPENAPI_DUMP;
+    #[cfg(test)]
+    let dump: fn() -> serde_json::Value = || serde_json::Value::Null;
+
     let reg = Registration {
         service_type: "sentin8:ai",
         subdomain: "ai",
@@ -273,7 +277,7 @@ pub fn print(section: Option<String>) -> anyhow::Result<()> {
         service_actions: None,
         m2m_grants: Some(M2M_GRANTS),
         openapi_url: "/openapi.json",
-        openapi: openapi_spec,
+        openapi: dump,
     };
-    sentin8::registration::print_registration(section, &reg, openapi_spec)
+    sentin8::registration::print_registration(section, &reg, dump)
 }
