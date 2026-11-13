@@ -13,8 +13,6 @@ use sentin8::registration::{
     AdminScope, AdminUi, AdminUiPage, PgRole, PolicySetDecl, Registration, RelationDecl,
     ScheduleDecl, SqlMigration,
 };
-use utoipa::OpenApi;
-
 const PG_ROLES: &[PgRole] = &[PgRole {
     scope: "sentin8:ai:completion:write,sentin8:ai:chat:write,sentin8:ai:embedding:write,sentin8:ai:retrieval:read",
     role: "sentin8_ai_service",
