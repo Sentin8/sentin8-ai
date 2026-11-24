@@ -213,6 +213,7 @@ pub fn print(section: Option<String>) -> anyhow::Result<()> {
         service_type: "sentin8:ai",
         subdomain: "ai",
         health_path: "/v1/health",
+        exposure: "",
         admin_scopes: &[
             // Granular vocabulary : handlers gate each
             // primitive on its `sentin8:ai:{resource}:{action}` scope.
