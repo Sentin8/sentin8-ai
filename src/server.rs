@@ -9,12 +9,9 @@ use std::sync::Arc;
 
 use axum::routing::{get, post, put};
 use serde_json::json;
-use sqlx::Row;
 
 use crate::handlers::{self, AppState};
-use crate::providers::{
-    AnthropicAdapter, EmbeddingProvider, OllamaCloudAdapter, OpenAiAdapter, ProviderRouter, Route,
-};
+use crate::providers::ProviderRouter;
 
 pub async fn build_state(
     core: sentin8::shell::ServiceCore,
@@ -29,69 +26,17 @@ pub async fn build_state(
     // registration and risk a cache split with the admin API.
     let policy_engine = core.admin.policy.clone();
 
-    // ── Provider routes - resolve from the registry at boot.
-    // Credentials are secret REFERENCES resolved via the shared
-    // sentin8-secrets resolver chain ( - service/env/file backends;
-    // never plaintext in rows).
-    let mut routes = std::collections::HashMap::new();
-    let rows = sqlx::query(
-        "SELECT provider, base_url, credential_ref FROM ai.providers WHERE env_id = $1 AND status = 'active'",
-    )
-    .bind(sentin8_system_env_id(&core.pool).await)
-    .fetch_all(&core.pool)
-    .await
-    .unwrap_or_default();
-    for r in rows {
-        let provider: String = r.get("provider");
-        let base_url: String = r.get("base_url");
-        let credential_ref: String = r.get("credential_ref");
-        let credential = crate::config::credential_for(&credential_ref).await;
-        match provider.as_str() {
-            "openai" => {
-                routes.insert(
-                    "openai".into(),
-                    Route {
-                        provider: Arc::new(OpenAiAdapter {
-                            base_url: base_url.clone(),
-                        }),
-                        embedder: Some(Arc::new(OpenAiAdapter {
-                            base_url: base_url.clone(),
-                        }) as Arc<dyn EmbeddingProvider>),
-                        credential,
-                        model: String::new(),
-                    },
-                );
-            }
-            "anthropic" => {
-                routes.insert(
-                    "anthropic".into(),
-                    Route {
-                        provider: Arc::new(AnthropicAdapter {
-                            base_url: base_url.clone(),
-                            version: "2023-06-01".into(),
-                        }),
-                        embedder: None,
-                        credential,
-                        model: String::new(),
-                    },
-                );
-            }
-            "ollama" => {
-                routes.insert(
-                    "ollama".into(),
-                    Route {
-                        provider: Arc::new(OllamaCloudAdapter {
-                            base_url: base_url.clone(),
-                        }),
-                        embedder: Some(Arc::new(OllamaCloudAdapter {
-                            base_url: base_url.clone(),
-                        }) as Arc<dyn EmbeddingProvider>),
-                        credential,
-                        model: String::new(),
-                    },
-                );
-            }
-            other => tracing::warn!(provider = other, "unknown provider type in registry"),
+    // ── Provider routes are TENANT configuration (ai DESIGN.md §4.5).
+    // The cache resolves `(env, provider)` on demand and invalidates on
+    // `sentin8:ai:provider:updated`, so a tenant registration takes effect
+    // on the next request instead of requiring a restart.
+    let route_cache = Arc::new(crate::provider_routes::ProviderRouteCache::default());
+
+    // Seed the platform default eagerly so the first request in a fresh env
+    // does not pay two lookups, and so `/v1/health` can report readiness.
+    if let Some(platform_env) = sentin8_system_env_id_opt(&core.pool).await {
+        for provider in ["openai", "anthropic", "ollama", "vllm"] {
+            let _ = route_cache.resolve(&core.pool, platform_env, provider).await;
         }
     }
 
@@ -167,6 +112,34 @@ pub async fn build_state(
     // (SDD §2.6): the shell boot initialized the emitter (slug `ai`);
     // emission is fire-and-forget, log-only on failure.
 
+    // Cert-presenting Func client - `func_module` tools. Boot-soft: a
+    // missing certificate leaves `func` as `None` and the gateway denies
+    // those tools with an explicit reason rather than failing startup.
+    let func_client = match (&ai_cert, cfg_platform.sentin8_func_url()) {
+        (Ok(_), url) if !url.is_empty() => {
+            match sentin8::auth::m2m::ensure_workload_certificate(
+                &config.sentin8_auth_issuer,
+                "ai-proxy",
+                &sentin8::auth::m2m::platform_ca_path(),
+            )
+            .await
+            {
+                Ok(cert) => sentin8_func_sdk::client::FuncClient::with_workload_identity(
+                    url,
+                    &cert.ca_cert_path,
+                    &cert.cert_path,
+                    &cert.key_path,
+                )
+                .ok(),
+                Err(e) => {
+                    tracing::warn!(error = %e, "AI Func client: certificate not ready - func_module tools unavailable until next boot");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+
     let router_arc = std::sync::Arc::new(ProviderRouter::default());
     let storage_for_jobs = storage_client.clone();
 
@@ -181,20 +154,21 @@ pub async fn build_state(
             auth_client: Arc::new(config.auth_client.clone()),
         },
         router: std::sync::Arc::clone(&router_arc),
-        routes: routes.clone(),
+        routes: Arc::clone(&route_cache),
         storage: storage_client,
         flow: flow_client,
+        func: func_client,
     };
     crate::jobs::spawn_embedding_consumer(
         core.pool.clone(),
         bus_client.clone(),
-        routes.clone(),
+        Arc::clone(&route_cache),
         std::sync::Arc::clone(&router_arc),
     );
     crate::jobs::spawn_summary_consumer(
         core.pool.clone(),
         bus_client.clone(),
-        routes.clone(),
+        Arc::clone(&route_cache),
         std::sync::Arc::clone(&router_arc),
     );
     // Document pipeline - document.uploaded → Storage fetch →
@@ -202,7 +176,7 @@ pub async fn build_state(
     crate::jobs::spawn_document_consumer(
         core.pool.clone(),
         bus_client,
-        routes,
+        Arc::clone(&route_cache),
         router_arc,
         storage_for_jobs,
     );
@@ -212,15 +186,10 @@ pub async fn build_state(
     Ok(state)
 }
 
-/// The platform system env (sys/ops) owns the provider registry - it is
-/// platform configuration, not tenant data. The registry row for the system
-/// env is shared read-only config; per-env overrides land later.
-async fn sentin8_system_env_id(pool: &sqlx::PgPool) -> uuid::Uuid {
-    // sys/ops env ids are fixed UUIDs seeded by the platform bootstrap
-    // (sentin8_sys_environments, org 'sys' env 'ops'). Read the slug pair
-    // rather than hardcoding. The join column is `org_id` - the long
-    // `organization_id` form was dropped from the sys schema per the
-    // tenant conventions ().
+/// The platform system env (sys/ops) owns the DEFAULT provider routes - an
+/// env without its own provider row falls back to it. Returns `None` when
+/// bootstrap has not yet applied (boot proceeds with an empty default).
+async fn sentin8_system_env_id_opt(pool: &sqlx::PgPool) -> Option<uuid::Uuid> {
     match sqlx::query_scalar(
         "SELECT e.id FROM sys.environments e \
          JOIN sys.organizations o ON o.id = e.org_id \
@@ -229,21 +198,24 @@ async fn sentin8_system_env_id(pool: &sqlx::PgPool) -> uuid::Uuid {
     .fetch_optional(pool)
     .await
     {
-        Ok(Some(id)) => id,
-        Ok(None) => {
-            // Bootstrap not yet applied - fall back to the nil UUID so boot
-            // proceeds (no providers configured) instead of refusing to start.
-            tracing::warn!("sys/ops env not found - provider registry empty");
-            uuid::Uuid::nil()
-        }
+        Ok(id) => id,
         // A real SQL failure must be LOUD, not silently treated as
         // "bootstrap not applied" (the old `.ok` swallowed the
         // wrong-column error and mislabeled it as a missing env).
         Err(e) => {
-            tracing::error!(error = %e, "sys/ops env lookup failed - provider registry empty");
-            uuid::Uuid::nil()
+            tracing::error!(error = %e, "sys/ops env lookup failed - no platform provider default");
+            None
         }
     }
+}
+
+/// The platform system env, with the nil-UUID fallback used by callers that
+/// need a value (never for provider routing).
+async fn sentin8_system_env_id(pool: &sqlx::PgPool) -> uuid::Uuid {
+    sentin8_system_env_id_opt(pool).await.unwrap_or_else(|| {
+        tracing::warn!("sys/ops env not found - using nil env");
+        uuid::Uuid::nil()
+    })
 }
 
 /// Add this service's routes onto the shell-provided router. The shell
@@ -277,8 +249,53 @@ pub fn routes(
         )
         // ── Retrieval ──────────────────────────────────────────────
         .route("/v1/retrieval", post(handlers::retrieval))
-        // ── Agent runtime ──────────────────────────────────────────
+        // ── Agent runtime (§4.1) ───────────────────────────────────
         .route("/v1/agent/execute", post(handlers::agent_execute))
+        // Conversations (the multi-turn transcript plane)
+        .route(
+            "/v1/conversations",
+            post(crate::conversation::create_conversation)
+                .get(crate::conversation::list_conversations),
+        )
+        .route(
+            "/v1/conversations/{id}",
+            get(crate::conversation::get_conversation)
+                .put(crate::conversation::update_conversation),
+        )
+        .route(
+            "/v1/conversations/{id}/messages",
+            get(crate::conversation::list_messages),
+        )
+        // Turns - one bounded agent turn
+        .route(
+            "/v1/conversations/{id}/turns",
+            post(crate::conversation::post_turn),
+        )
+        .route("/v1/runs/{id}", get(crate::conversation::get_run))
+        .route("/v1/runs/{id}/cancel", post(crate::conversation::cancel_run))
+        // Tools (the tenant-authorable capability registry)
+        .route("/v1/tools", get(crate::conversation::list_tools))
+        .route(
+            "/v1/tools/{name}",
+            put(crate::conversation::put_tool).delete(crate::conversation::delete_tool),
+        )
+        // Agents + policies
+        .route("/v1/agents", get(crate::conversation::list_agents))
+        .route(
+            "/v1/agents/{name}",
+            put(crate::conversation::put_agent).delete(crate::conversation::delete_agent),
+        )
+        .route("/v1/agent-policies", get(crate::conversation::list_policies))
+        .route(
+            "/v1/agent-policies/{name}",
+            put(crate::conversation::put_policy),
+        )
+        // Human approval for irreversible tool actions
+        .route("/v1/approvals", get(crate::conversation::list_approvals))
+        .route(
+            "/v1/approvals/{id}/decide",
+            post(crate::conversation::decide_approval),
+        )
         // ── Budgets ──────────────────────────────────────────────
         .route(
             "/v1/budgets/{feature}",
@@ -329,6 +346,14 @@ pub fn routes(
         .route(
             "/v1/internal/schedules/run",
             post(handlers::internal_schedules_run),
+        )
+        // ── Internal agent step execution (Flow proxy-back) ─────────
+        // Flow's domain-step transport POSTs `{internal_path}/execute`, so
+        // the agent runtime's legacy JSON-intent path addresses
+        // `/v1/internal/agent` (ai DESIGN.md §4.1).
+        .route(
+            "/v1/internal/agent/execute",
+            post(crate::conversation::internal_agent_step),
         )
         // ── Admin UI (RFW - /) ───────────────────────────────
         .route("/v1/admin/ui/{*page}", get(crate::admin_ui::get_admin_ui))

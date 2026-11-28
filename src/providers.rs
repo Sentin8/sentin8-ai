@@ -53,22 +53,159 @@ impl ProviderCredential {
 
 // ── Wire types (provider-agnostic, normalized) ─────────────────────────────
 
-/// A single chat message in the normalized envelope.
+/// A tool call a model emitted, normalised across providers.
+///
+/// OpenAI-family providers carry `arguments` as a JSON *string*; Anthropic
+/// carries an already-decoded object. Both converge here as a parsed
+/// [`serde_json::Value`] so the turn runner never handles provider wire
+/// shapes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
+pub struct ToolCall {
+    /// Provider-assigned call id (echoed back on the tool-result message).
+    pub id: String,
+    /// Tool name - resolved against `ai.tools` by the gateway.
+    pub name: String,
+    /// Decoded arguments object.
+    pub arguments: serde_json::Value,
+}
+
+/// Why the model stopped, normalised across providers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FinishReason {
+    /// Natural end of turn.
+    Stop,
+    /// The model wants one or more tools executed.
+    ToolCalls,
+    /// Hit the token cap.
+    Length,
+    /// Blocked by the provider's own safety filter.
+    ContentFilter,
+}
+
+impl FinishReason {
+    /// Normalise an OpenAI-family `finish_reason` string.
+    pub fn from_openai(raw: &str) -> Self {
+        match raw {
+            "tool_calls" | "function_call" => FinishReason::ToolCalls,
+            "length" => FinishReason::Length,
+            "content_filter" => FinishReason::ContentFilter,
+            _ => FinishReason::Stop,
+        }
+    }
+
+    /// Normalise an Anthropic `stop_reason` string.
+    pub fn from_anthropic(raw: &str) -> Self {
+        match raw {
+            "tool_use" => FinishReason::ToolCalls,
+            "max_tokens" => FinishReason::Length,
+            "refusal" => FinishReason::ContentFilter,
+            _ => FinishReason::Stop,
+        }
+    }
+}
+
+impl Default for FinishReason {
+    fn default() -> Self {
+        FinishReason::Stop
+    }
+}
+
+/// Build a [`Route`] for one provider row. Credential material is resolved
+/// from a secret REFERENCE at call time (ai DESIGN.md §3 "Secrets") - it is
+/// never persisted and never logged.
+///
+/// Returns `None` for an unknown provider name so the caller can report a
+/// meaningful 422 rather than routing to nothing.
+pub async fn build_route(
+    provider: &str,
+    base_url: &str,
+    credential_ref: &str,
+) -> Option<Route> {
+    use std::sync::Arc;
+    let credential = crate::config::credential_for(credential_ref).await;
+    let (adapter, embedder): (Arc<dyn CompletionProvider>, Option<Arc<dyn EmbeddingProvider>>) =
+        match provider {
+            "openai" => {
+                let a = Arc::new(OpenAiAdapter {
+                    base_url: base_url.to_string(),
+                });
+                (a.clone(), Some(a as Arc<dyn EmbeddingProvider>))
+            }
+            "anthropic" => (
+                Arc::new(AnthropicAdapter {
+                    base_url: base_url.to_string(),
+                    version: "2023-06-01".into(),
+                }),
+                None,
+            ),
+            "ollama" => {
+                let a = Arc::new(OllamaCloudAdapter {
+                    base_url: base_url.to_string(),
+                });
+                (a.clone(), Some(a as Arc<dyn EmbeddingProvider>))
+            }
+            "vllm" => {
+                let a = Arc::new(VllmAdapter {
+                    base_url: base_url.to_string(),
+                });
+                (a.clone(), Some(a as Arc<dyn EmbeddingProvider>))
+            }
+            other => {
+                tracing::warn!(provider = other, "unknown provider type in registry");
+                return None;
+            }
+        };
+    Some(Route {
+        provider: adapter,
+        embedder,
+        credential,
+        model: String::new(),
+    })
+}
+
+/// A single chat message in the normalized envelope.
+///
+/// `tool_calls` is set on an assistant message that asked for tools;
+/// `tool_call_id` is set on a `role: "tool"` message carrying a result.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct ChatMessage {
+    /// `system` | `user` | `assistant` | `tool`.
     pub role: String,
+    /// Text content. Empty on an assistant turn that only calls tools.
+    #[serde(default)]
     pub content: String,
+    /// Tool calls an assistant message requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    /// Links a `role: "tool"` message to the call it answers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+}
+
+impl ChatMessage {
+    /// A plain text message - the common case for prompts and user turns.
+    pub fn text(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
 }
 
 /// Normalized completion/chat request passed to adapters.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CompletionRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<u32>,
-    /// Declared tools (pass-through; agent runtime resolves these).
+    /// Declared tool definitions (JSON Schema function objects).
     pub tools: Vec<serde_json::Value>,
+    /// `auto` | `none` | `required`; omitted from the wire when `None`.
+    pub tool_choice: Option<String>,
 }
 
 /// Normalized completion/chat response with token usage.
@@ -81,6 +218,12 @@ pub struct CompletionResponse {
     /// AI-1: true when usage was estimated, not provider-reported.
     #[serde(default)]
     pub usage_estimated: bool,
+    /// Tool calls the model requested (empty when it answered directly).
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+    /// Why the model stopped.
+    #[serde(default)]
+    pub finish_reason: FinishReason,
 }
 
 /// Normalized embedding request.
@@ -213,13 +356,84 @@ pub struct OpenAiAdapter {
 #[derive(Debug, Serialize)]
 struct OpenAiChatBody<'a> {
     model: &'a str,
-    messages: Vec<ChatMessage>,
+    messages: Vec<OpenAiWireMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<String>,
+}
+
+impl<'a> OpenAiChatBody<'a> {
+    fn from_request(req: &'a CompletionRequest) -> Self {
+        Self {
+            model: &req.model,
+            messages: req.messages.iter().map(OpenAiWireMessage::from).collect(),
+            temperature: req.temperature,
+            max_tokens: req.max_tokens,
+            tools: req.tools.clone(),
+            tool_choice: req.tool_choice.clone(),
+        }
+    }
+}
+
+/// OpenAI wire message: `tool_calls` on assistant turns, `tool_call_id` on
+/// tool results. `content` is null on an assistant turn that only calls
+/// tools.
+#[derive(Debug, Serialize)]
+struct OpenAiWireMessage {
+    role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<OpenAiWireToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+}
+
+impl From<&ChatMessage> for OpenAiWireMessage {
+    fn from(m: &ChatMessage) -> Self {
+        Self {
+            role: m.role.clone(),
+            content: if m.content.is_empty() && m.tool_calls.is_some() {
+                None
+            } else {
+                Some(m.content.clone())
+            },
+            tool_calls: m.tool_calls.as_ref().map(|calls| {
+                calls
+                    .iter()
+                    .map(|c| OpenAiWireToolCall {
+                        id: c.id.clone(),
+                        kind: "function".into(),
+                        function: OpenAiWireFunction {
+                            name: c.name.clone(),
+                            arguments: c.arguments.to_string(),
+                        },
+                    })
+                    .collect()
+            }),
+            tool_call_id: m.tool_call_id.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiWireToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    kind: String,
+    function: OpenAiWireFunction,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiWireFunction {
+    name: String,
+    /// OpenAI requires a JSON *string* here.
+    arguments: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -232,12 +446,51 @@ struct OpenAiChatResp {
 struct OpenAiChoice {
     #[serde(default)]
     message: Option<OpenAiMessage>,
+    #[serde(default)]
+    finish_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OpenAiMessage {
     #[serde(default)]
     content: Option<String>,
+    #[serde(default)]
+    tool_calls: Vec<OpenAiToolCall>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiToolCall {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    function: Option<OpenAiFunctionCall>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiFunctionCall {
+    #[serde(default)]
+    name: String,
+    /// JSON *string* on the wire; decoded in [`normalise_openai_tool_calls`].
+    #[serde(default)]
+    arguments: String,
+}
+
+/// Decode OpenAI-family tool calls into the normalised shape. A malformed
+/// `arguments` string yields an empty object rather than dropping the call -
+/// the gateway's schema check then denies it with a reason the model can
+/// read.
+fn normalise_openai_tool_calls(calls: &[OpenAiToolCall]) -> Vec<ToolCall> {
+    calls
+        .iter()
+        .filter_map(|c| {
+            let f = c.function.as_ref()?;
+            Some(ToolCall {
+                id: c.id.clone(),
+                name: f.name.clone(),
+                arguments: serde_json::from_str(&f.arguments).unwrap_or(serde_json::Value::Null),
+            })
+        })
+        .collect()
 }
 
 #[derive(Debug, Deserialize)]
@@ -280,13 +533,7 @@ impl CompletionProvider for OpenAiAdapter {
             "{}/v1/chat/completions",
             self.base_url.trim_end_matches('/')
         );
-        let body = OpenAiChatBody {
-            model: &req.model,
-            messages: req.messages.clone(),
-            temperature: req.temperature,
-            max_tokens: req.max_tokens,
-            tools: req.tools.clone(),
-        };
+        let body = OpenAiChatBody::from_request(req);
         let resp = client
             .post(&url)
             .headers(credential.clone().apply(Default::default()))
@@ -355,12 +602,32 @@ async fn parse_openai_chat(
         .and_then(|c| c.message.as_ref())
         .and_then(|m| m.content.clone())
         .unwrap_or_default();
+    let tool_calls = parsed
+        .choices
+        .first()
+        .and_then(|c| c.message.as_ref())
+        .map(|m| normalise_openai_tool_calls(&m.tool_calls))
+        .unwrap_or_default();
+    let finish_reason = parsed
+        .choices
+        .first()
+        .and_then(|c| c.finish_reason.as_deref())
+        .map(FinishReason::from_openai)
+        .unwrap_or_else(|| {
+            if tool_calls.is_empty() {
+                FinishReason::Stop
+            } else {
+                FinishReason::ToolCalls
+            }
+        });
     Ok(CompletionResponse {
         content,
         model: req.model.clone(),
         usage_estimated: false,
         input_tokens: parsed.usage.prompt_tokens,
         output_tokens: parsed.usage.completion_tokens,
+        tool_calls,
+        finish_reason,
     })
 }
 
@@ -726,24 +993,92 @@ struct AnthropicBody<'a> {
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tools: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Anthropic message: `content` is either a string or a block array. Tool
+/// results arrive as `tool_result` blocks on a `user` turn; assistant tool
+/// calls are `tool_use` blocks.
+#[derive(Debug, Serialize)]
 struct AnthropicMessage {
     role: String,
-    content: String,
+    content: serde_json::Value,
+}
+
+/// Convert the normalised envelope to Anthropic's block shape. The system
+/// message is lifted out (Anthropic takes it as a top-level field).
+fn anthropic_messages(messages: &[ChatMessage]) -> (Option<String>, Vec<AnthropicMessage>) {
+    let mut system: Option<String> = None;
+    let mut out = Vec::new();
+    for m in messages {
+        match m.role.as_str() {
+            "system" => {
+                system = Some(match system {
+                    Some(s) => format!("{s}\n\n{}", m.content),
+                    None => m.content.clone(),
+                });
+            }
+            "tool" => out.push(AnthropicMessage {
+                role: "user".into(),
+                content: serde_json::json!([{
+                    "type": "tool_result",
+                    "tool_use_id": m.tool_call_id.clone().unwrap_or_default(),
+                    "content": m.content,
+                }]),
+            }),
+            "assistant" if m.tool_calls.as_ref().is_some_and(|c| !c.is_empty()) => {
+                let mut blocks: Vec<serde_json::Value> = Vec::new();
+                if !m.content.is_empty() {
+                    blocks.push(serde_json::json!({"type": "text", "text": m.content}));
+                }
+                for call in m.tool_calls.as_ref().unwrap_or(&Vec::new()) {
+                    blocks.push(serde_json::json!({
+                        "type": "tool_use",
+                        "id": call.id,
+                        "name": call.name,
+                        "input": call.arguments,
+                    }));
+                }
+                out.push(AnthropicMessage {
+                    role: "assistant".into(),
+                    content: serde_json::Value::Array(blocks),
+                });
+            }
+            _ => out.push(AnthropicMessage {
+                role: m.role.clone(),
+                content: serde_json::Value::String(m.content.clone()),
+            }),
+        }
+    }
+    (system, out)
 }
 
 #[derive(Debug, Deserialize)]
 struct AnthropicResp {
     content: Vec<AnthropicContent>,
     usage: AnthropicUsage,
+    #[serde(default)]
+    stop_reason: Option<String>,
 }
 
+/// One content block - text, tool use, or something else we ignore.
 #[derive(Debug, Deserialize)]
 struct AnthropicContent {
+    #[serde(default, rename = "type")]
+    kind: String,
     #[serde(default)]
     text: Option<String>,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    input: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -768,19 +1103,20 @@ impl CompletionProvider for AnthropicAdapter {
     ) -> Result<CompletionResponse, ProviderError> {
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         // Anthropic requires a max_tokens; default to 4096 when unset.
+        let (system, messages) = anthropic_messages(&req.messages);
         let body = AnthropicBody {
             model: &req.model,
-            messages: req
-                .messages
-                .iter()
-                .filter(|m| m.role != "system")
-                .map(|m| AnthropicMessage {
-                    role: m.role.clone(),
-                    content: m.content.clone(),
-                })
-                .collect(),
+            messages,
             max_tokens: Some(req.max_tokens.unwrap_or(4096)),
             temperature: req.temperature,
+            system,
+            tools: req.tools.clone(),
+            tool_choice: req.tool_choice.as_ref().map(|c| match c.as_str() {
+                "auto" => serde_json::json!({"type": "auto"}),
+                "required" | "any" => serde_json::json!({"type": "any"}),
+                "none" => serde_json::json!({"type": "none"}),
+                other => serde_json::json!({"type": other}),
+            }),
         };
         let headers = credential.clone().apply(Default::default());
         let headers = {
@@ -823,16 +1159,42 @@ impl CompletionProvider for AnthropicAdapter {
             })?;
         let content = parsed
             .content
-            .into_iter()
-            .filter_map(|c| c.text)
+            .iter()
+            .filter(|c| c.kind == "text")
+            .filter_map(|c| c.text.clone())
             .collect::<Vec<_>>()
             .join("");
+        let tool_calls = parsed
+            .content
+            .iter()
+            .filter(|c| c.kind == "tool_use")
+            .filter_map(|c| {
+                Some(ToolCall {
+                    id: c.id.clone()?,
+                    name: c.name.clone()?,
+                    arguments: c.input.clone().unwrap_or(serde_json::Value::Null),
+                })
+            })
+            .collect::<Vec<_>>();
+        let finish_reason = parsed
+            .stop_reason
+            .as_deref()
+            .map(FinishReason::from_anthropic)
+            .unwrap_or_else(|| {
+                if tool_calls.is_empty() {
+                    FinishReason::Stop
+                } else {
+                    FinishReason::ToolCalls
+                }
+            });
         Ok(CompletionResponse {
             content,
             model: req.model.clone(),
             input_tokens: parsed.usage.input_tokens,
             output_tokens: parsed.usage.output_tokens,
             usage_estimated: false,
+            tool_calls,
+            finish_reason,
         })
     }
 }
@@ -1256,10 +1618,12 @@ mod tests {
                     messages: vec![ChatMessage {
                         role: "user".into(),
                         content: "x".into(),
+                        ..Default::default()
                     }],
                     temperature: None,
                     max_tokens: None,
                     tools: vec![],
+                    tool_choice: None,
                 },
             )
             .await

@@ -7,15 +7,21 @@
 //! this crate name (`sentin8_ai_server`), mirroring the post/cron pattern.
 
 pub mod agent;
+pub mod agent_gateway;
 pub mod ai_aliases;
 pub mod auth;
 pub mod config;
+pub mod conversation;
 pub mod handlers;
 pub mod jobs;
 pub mod metrics;
 pub mod policy;
+pub mod provider_routes;
 pub mod providers;
+pub mod rate_limit;
 pub mod safety;
+pub mod tools;
+pub mod turn;
 
 /// Test-only env fixture helpers (compiled only under `cfg(test)` of the
 /// integration test crate, which imports this module).

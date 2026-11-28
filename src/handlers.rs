@@ -38,20 +38,22 @@ pub struct AppState {
     pub admin: sentin8::shield::admin::SharedAdminState,
     /// Model-provider router (built at boot from `sentin8_ai_providers`).
     pub router: Arc<ProviderRouter>,
-    /// Resolved provider routes (adapter + credential + model), keyed by
-    /// provider name. Credentials are secret-reference-resolved at boot.
-    pub routes: std::collections::HashMap<String, Route>,
+    /// Per-env provider route cache - resolves `(env, provider)` on demand
+    /// and invalidates on `sentin8:ai:provider:updated` (ai DESIGN.md §4.5).
+    pub routes: std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     /// M2M-authenticated Storage client - chunk text + trace archive.
     pub storage: sentin8_storage_sdk::client::StorageClient,
     /// M2M-authenticated Flow client - agent workflow creation.
     pub flow: sentin8_flow_sdk::client::FlowClient,
+    /// M2M-authenticated Func client - `func_module` tools. `None` when no
+    /// Func URL is configured or the workload certificate is not ready yet
+    /// (the gateway then denies `func_module` tools with a clear reason).
+    pub func: Option<sentin8_func_sdk::client::FuncClient>,
 }
 
 impl std::fmt::Debug for AppState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AppState")
-            .field("providers", &self.routes.keys().collect::<Vec<_>>())
-            .finish_non_exhaustive()
+        f.debug_struct("AppState").finish_non_exhaustive()
     }
 }
 
@@ -59,7 +61,7 @@ pub fn err_db_pub(e: sqlx::Error) -> (StatusCode, String) {
     err_db(e)
 }
 
-fn err_db(e: sqlx::Error) -> (StatusCode, String) {
+pub(crate) fn err_db(e: sqlx::Error) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, format!("db error: {e}"))
 }
 
@@ -70,27 +72,164 @@ fn err_bad(msg: impl Into<String>) -> (StatusCode, String) {
 /// Set the RLS tenant context inside a transaction. `sentin8_set_tenant_context`
 /// uses `set_config(. , true)` - transaction-local, so this MUST run inside
 /// the same transaction as the domain statements.
+///
+/// The subject is stamped so holder-scoped conversation policies
+/// (`owner_sub = sentin8_current_subject_id()`) can resolve - see ai
+/// DESIGN.md §3 "Holder-scoped RLS on conversations".
 async fn set_rls_tx(
     tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
     env_id: Uuid,
+    subject_id: Option<&str>,
+    env_admin: bool,
 ) -> Result<(), (StatusCode, String)> {
-    sqlx::query("SELECT sentin8_set_tenant_context($1)")
-        .bind(env_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(err_db)?;
+    sqlx::query(
+        "SELECT sentin8_set_tenant_context($1, $2, NULL, NULL, FALSE, FALSE, $3)",
+    )
+    .bind(env_id)
+    .bind(subject_id)
+    .bind(env_admin)
+    .execute(&mut **tx)
+    .await
+    .map_err(err_db)?;
     Ok(())
+}
+
+/// Env-admin stamp for the RLS context. Derived ONLY from the caller's live
+/// token scopes (`sys:env:admin` / `sys:org:admin` / `sys:admin`), never from
+/// a request parameter. Authorization itself stays Shield's job - this stamp
+/// only widens row visibility so an env admin can read a conversation they do
+/// not own (ai DESIGN.md §3 holder-scoped RLS).
+fn is_env_admin(scope: &str) -> bool {
+    scope
+        .split_whitespace()
+        .any(|s| matches!(s, "sys:admin" | "sys:env:admin" | "sys:org:admin"))
 }
 
 /// Begin a transaction with the tenant context set - the RLS-scoped unit
 /// for every handler (cron SEC-2.4.8 pattern).
-async fn begin_tenant_tx(
+pub(crate) async fn begin_tenant_tx(
     pool: &sqlx::PgPool,
     env_id: Uuid,
 ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, (StatusCode, String)> {
+    begin_tenant_tx_as(pool, env_id, None, false).await
+}
+
+/// Tenant transaction with an explicit subject - required for the
+/// holder-scoped conversation tables.
+async fn begin_tenant_tx_as(
+    pool: &sqlx::PgPool,
+    env_id: Uuid,
+    subject_id: Option<&str>,
+    env_admin: bool,
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, (StatusCode, String)> {
     let mut tx = pool.begin().await.map_err(err_db)?;
-    set_rls_tx(&mut tx, env_id).await?;
+    set_rls_tx(&mut tx, env_id, subject_id, env_admin).await?;
     Ok(tx)
+}
+
+/// Tenant transaction scoped to the authenticated caller - stamps the
+/// subject and the env-admin flag so the holder-scoped conversation
+/// policies resolve. Every conversation/message/run/tool-call handler uses
+/// this form.
+pub(crate) async fn begin_agent_tx(
+    pool: &sqlx::PgPool,
+    env_id: Uuid,
+    a: &auth::AuthContext,
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, (StatusCode, String)> {
+    begin_tenant_tx_as(pool, env_id, Some(a.claims.sub.as_str()), is_env_admin(&a.claims.scope)).await
+}
+
+// ── Cross-module helpers (conversation plane) ──────────────────────────────
+//
+// The conversation/turn handlers live in `crate::conversation`; these thin
+// wrappers expose the shared pipeline pieces without widening the private
+// surface of this module.
+
+/// Resolve the effective env (see [`resolve_env_id`]).
+pub(crate) fn resolve_env_id_pub(
+    a: &auth::AuthContext,
+    target_env_id: Option<&str>,
+) -> Result<Uuid, (StatusCode, String)> {
+    resolve_env_id(a, target_env_id)
+}
+
+/// Budget gate (see [`check_budget`]); returns the degrade/queue mode when a
+/// non-reject enforcement applies.
+pub(crate) async fn check_budget_pub(
+    tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+    env_id: Uuid,
+    feature: &str,
+) -> Result<Option<String>, (StatusCode, String)> {
+    check_budget(tx, env_id, feature).await
+}
+
+/// Provider route resolution (see [`route_for_env`]).
+pub(crate) async fn route_for_pub(
+    state: &AppState,
+    env_id: Uuid,
+    model: &str,
+    fallback: Option<&str>,
+) -> Result<(std::sync::Arc<Route>, Option<std::sync::Arc<Route>>), (StatusCode, String)> {
+    route_for_env(state, env_id, model, fallback).await
+}
+
+/// Prompt resolution (see [`resolve_prompt`]).
+pub(crate) async fn resolve_prompt_pub(
+    tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+    env_id: Uuid,
+    name: &str,
+    version: Option<i32>,
+) -> Result<PromptResolved, (StatusCode, String)> {
+    resolve_prompt(tx, env_id, name, version).await
+}
+
+/// Insert an inference trace attributed to an agent run (ai DESIGN.md §3:
+/// `ai.traces.run_id` makes an inference attributable to the turn that caused
+/// it without putting a conversation key on the metrics row).
+pub(crate) async fn trace_run_tx(
+    tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+    env_id: Uuid,
+    run_id: Uuid,
+    prompt_name: &str,
+    model: &str,
+    feature: &str,
+    input_tokens: i64,
+    output_tokens: i64,
+    latency_ms: i32,
+) -> Result<(), (StatusCode, String)> {
+    sqlx::query(
+        "INSERT INTO ai.traces          (prompt_name, model, feature, input_tokens, output_tokens, latency_ms, cache_hit, status, subject_id, env_id, run_id)          VALUES ($1,$2,$3,$4,$5,$6,false,'ok','',$7,$8)",
+    )
+    .bind(prompt_name)
+    .bind(model)
+    .bind(feature)
+    .bind(input_tokens)
+    .bind(output_tokens)
+    .bind(latency_ms)
+    .bind(env_id)
+    .bind(run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(err_db)?;
+    Ok(())
+}
+
+/// Emit a domain event in the caller's transaction (DBX outbox pattern).
+pub(crate) async fn emit_event_tx(
+    tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+    env_id: Uuid,
+    event_type: &str,
+    payload: &serde_json::Value,
+) -> Result<(), (StatusCode, String)> {
+    sentin8::bus::outbox::insert_outbox_row(&mut **tx, env_id, "ai", event_type, payload)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("event emit failed: {e}"),
+            )
+        })?;
+    Ok(())
 }
 
 /// Query params accepted by all env-scoped endpoints. `target_env_id` is
@@ -105,7 +244,7 @@ pub struct TargetEnvQuery {
 
 /// Resolve the effective env_id: prefer `target_env_id` from query params
 /// (BFF proxy), fall back to the token's env_id.
-fn resolve_env_id(
+pub(crate) fn resolve_env_id(
     a: &auth::AuthContext,
     target_env_id: Option<&str>,
 ) -> Result<Uuid, (StatusCode, String)> {
@@ -133,13 +272,13 @@ fn resolve_env_id(
     responses((status = 200, description = "Service healthy")),
     tag = "ai",
 )]
-pub async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
+pub async fn health(State(_state): State<AppState>) -> Json<serde_json::Value> {
     let mut payload = serde_json::json!({
         "service": "sentin8:ai",
         "status": "ok",
         "version": sentin8::build_info::id(),
         "build": sentin8::build_info::build_hash(),
-        "providers": state.routes.keys().collect::<Vec<_>>(),
+        "providers": { "dynamic": true },
     });
     if let Some(n) = sentin8::middleware::traffic_counter::process_active_connections() {
         payload["active_connections"] = serde_json::json!(n);
@@ -513,7 +652,7 @@ pub struct InferenceResponse {
 }
 
 /// Resolve the active prompt record: explicit version → pinned → latest.
-async fn resolve_prompt(
+pub(crate) async fn resolve_prompt(
     tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
     env_id: Uuid,
     name: &str,
@@ -563,46 +702,75 @@ async fn resolve_prompt(
 
 /// Extracted prompt fields (PgRow is not Clone - pull values eagerly).
 #[derive(Debug, Clone)]
-struct PromptResolved {
-    system_text: String,
-    user_text: String,
-    model_primary: String,
-    model_fallback: Option<String>,
-    temperature: Option<f64>,
-    max_tokens: Option<i32>,
-    tools: serde_json::Value,
-    output_schema: Option<serde_json::Value>,
-    version: i32,
+pub(crate) struct PromptResolved {
+    pub(crate) system_text: String,
+    pub(crate) user_text: String,
+    pub(crate) model_primary: String,
+    pub(crate) model_fallback: Option<String>,
+    pub(crate) temperature: Option<f64>,
+    pub(crate) max_tokens: Option<i32>,
+    pub(crate) tools: serde_json::Value,
+    pub(crate) output_schema: Option<serde_json::Value>,
+    pub(crate) version: i32,
 }
 
-fn route_for<'s>(
-    state: &'s AppState,
+/// The env's first provider that offers embeddings. Retrieval and document
+/// ingest use whichever embedder the env configured - there is no global
+/// default, because an embedding space is per-tenant.
+async fn resolve_embedding_route(
+    state: &AppState,
+    env_id: Uuid,
+) -> Result<std::sync::Arc<Route>, (StatusCode, String)> {
+    for provider in ["openai", "ollama", "vllm"] {
+        if let Some(route) = state.routes.resolve(&state.pool, env_id, provider).await {
+            if route.embedder.is_some() {
+                return Ok(route);
+            }
+        }
+    }
+    Err((
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "no embedding provider configured for this environment".to_string(),
+    ))
+}
+
+/// Provider prefix of a `provider/model` string (`openai/gpt-5` → `openai`).
+/// A bare model name routes to the `openai`-compatible default.
+fn provider_prefix(model: &str) -> &str {
+    model.split_once('/').map(|(p, _)| p).unwrap_or("openai")
+}
+
+/// Resolve the primary + optional fallback route for `model` in `env_id`.
+/// Routes are TENANT configuration resolved per request (ai DESIGN.md §4.5):
+/// the env's own provider row wins, falling back to the platform default.
+pub(crate) async fn route_for_env(
+    state: &AppState,
+    env_id: Uuid,
     model: &str,
     fallback: Option<&str>,
-) -> Result<(&'s Route, Option<&'s Route>), (StatusCode, String)> {
-    // Model names carry the provider prefix: "openai/gpt-5", "ollama/llama3".
-    // The model portion is passed through to the provider adapter verbatim;
-    // routing decisions only need the provider prefix.
-    let (provider_name, _model) = model
-        .split_once('/')
-        .map(|(p, m)| (p.to_string(), m.to_string()))
-        .unwrap_or_else(|| ("openai".to_string(), model.to_string()));
-    let primary = state.routes.get(&provider_name).ok_or_else(|| {
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            format!("provider '{provider_name}' is not configured for this environment"),
-        )
-    })?;
-    let fb = fallback.and_then(|f| {
-        f.split_once('/')
-            .map(|(p, _)| p)
-            .unwrap_or(provider_name.as_str());
-        state.routes.get(
-            f.split_once('/')
-                .map(|(p, _)| p)
-                .unwrap_or(provider_name.as_str()),
-        )
-    });
+) -> Result<(std::sync::Arc<Route>, Option<std::sync::Arc<Route>>), (StatusCode, String)> {
+    let provider_name = provider_prefix(model);
+    let primary = state
+        .routes
+        .resolve(&state.pool, env_id, provider_name)
+        .await
+        .ok_or_else(|| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("provider '{provider_name}' is not configured for this environment"),
+            )
+        })?;
+    let fb = match fallback {
+        Some(f) => {
+            let fb_provider = provider_prefix(f);
+            if fb_provider == provider_name {
+                None
+            } else {
+                state.routes.resolve(&state.pool, env_id, fb_provider).await
+            }
+        }
+        None => None,
+    };
     Ok((primary, fb))
 }
 
@@ -726,6 +894,7 @@ async fn run_inference(
                     crate::providers::ChatMessage {
                         role: "system".into(),
                         content: p.system_text.clone(),
+                        ..Default::default()
                     },
                 );
             }
@@ -733,6 +902,7 @@ async fn run_inference(
                 messages.push(crate::providers::ChatMessage {
                     role: "user".into(),
                     content: p.user_text.clone(),
+                    ..Default::default()
                 });
             }
             Some(p)
@@ -743,6 +913,7 @@ async fn run_inference(
         messages.push(crate::providers::ChatMessage {
             role: "user".into(),
             content: input.clone(),
+            ..Default::default()
         });
     }
     if messages.is_empty() {
@@ -760,7 +931,8 @@ async fn run_inference(
         .temperature
         .or_else(|| prompt.as_ref().and_then(|p| p.temperature));
     let (primary_route, fallback_route) =
-        route_for(&state, &model_primary, model_fallback.as_deref())?;
+        route_for_env(&state, env_id, &model_primary, model_fallback.as_deref())
+            .await?;
 
     // Cost gate : budget check BEFORE the provider call. Reject-mode
     // breach → 429; degrade/queue → response flag on the trace feature.
@@ -807,11 +979,12 @@ async fn run_inference(
                 .map(|p| p.tools.clone())
                 .and_then(|t| t.as_array().cloned())
                 .unwrap_or_default(),
+            tool_choice: None,
         };
         let client = reqwest::Client::new();
         let resp = state
             .router
-            .complete(&client, primary_route, fallback_route, &req)
+            .complete(&client, &primary_route, fallback_route.as_deref(), &req)
             .await
             .map_err(|e| match &e {
                 crate::providers::ProviderError::Terminal { message, .. } => {
@@ -1082,13 +1255,13 @@ pub async fn embeddings(
     )
     .await?;
     let env_id = resolve_env_id(&a, body.target_env_id.as_deref())?;
-    let (route, _) = route_for(&state, &body.model, None)?;
+    let (route, _) = route_for_env(&state, env_id, &body.model, None).await?;
     let client = reqwest::Client::new();
     let resp = state
         .router
         .embed(
             &client,
-            route,
+            &route,
             &crate::providers::EmbeddingRequest {
                 model: body
                     .model
@@ -1238,7 +1411,19 @@ pub async fn put_provider(
     .execute(&mut *tx)
     .await
     .map_err(err_db)?;
+    // Inbox-first: the route cache on every instance invalidates from this
+    // event, so a provider change takes effect without a restart.
+    emit_event_tx(
+        &mut tx,
+        env_id,
+        "sentin8:ai:provider:updated",
+        &serde_json::json!({ "provider": provider }),
+    )
+    .await?;
     tx.commit().await.map_err(err_db)?;
+    // Local invalidation - the emitting instance must not serve a stale route
+    // even if its own event round-trip is slow.
+    state.routes.invalidate(env_id, Some(&provider));
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1274,7 +1459,15 @@ pub async fn delete_provider(
         .execute(&mut *tx)
         .await
         .map_err(err_db)?;
+    emit_event_tx(
+        &mut tx,
+        env_id,
+        "sentin8:ai:provider:updated",
+        &serde_json::json!({ "provider": provider, "deleted": true }),
+    )
+    .await?;
     tx.commit().await.map_err(err_db)?;
+    state.routes.invalidate(env_id, Some(&provider));
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1515,23 +1708,14 @@ pub async fn retrieval(
         return Err(err_bad("query is required"));
     }
 
-    // Embed the query via the first configured embedder.
-    let route = state
-        .routes
-        .values()
-        .find(|r| r.embedder.is_some())
-        .ok_or_else(|| {
-            (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "no embedding provider configured".to_string(),
-            )
-        })?;
+    // Embed the query via the env's first configured embedder.
+    let route = resolve_embedding_route(&state, env_id).await?;
     let client = reqwest::Client::new();
     let emb = state
         .router
         .embed(
             &client,
-            route,
+            &route,
             &crate::providers::EmbeddingRequest {
                 model: route.model.clone(),
                 inputs: vec![body.query.clone()],
@@ -1630,7 +1814,7 @@ pub async fn retrieval(
     // returns the pre-rerank order (retrieval never hard-fails on rerank).
     if let Some(rerank_model) = &body.rerank_model {
         if let Ok(reranked) =
-            rerank_chunks(&state, &client, rerank_model, &body.query, &chunks).await
+            rerank_chunks(&state, &client, env_id, rerank_model, &body.query, &chunks).await
         {
             chunks = reranked;
         }
@@ -1675,11 +1859,12 @@ fn metadata_filter_sql(filters: &serde_json::Value) -> Result<String, (StatusCod
 async fn rerank_chunks(
     state: &AppState,
     client: &reqwest::Client,
+    env_id: Uuid,
     rerank_model: &str,
     query: &str,
     chunks: &[serde_json::Value],
 ) -> Result<Vec<serde_json::Value>, (StatusCode, String)> {
-    let (primary_route, fallback_route) = route_for(state, rerank_model, None)?;
+    let (primary_route, fallback_route) = route_for_env(state, env_id, rerank_model, None).await?;
     let candidates: Vec<String> = chunks
         .iter()
         .map(|c| {
@@ -1707,14 +1892,16 @@ async fn rerank_chunks(
                     .join("\n"),
                 len = candidates.len(),
             ),
+            ..Default::default()
         }],
         temperature: Some(0.0),
         max_tokens: Some(256),
         tools: vec![],
+        tool_choice: None,
     };
     let resp = state
         .router
-        .complete(client, primary_route, fallback_route, &req)
+        .complete(client, &primary_route, fallback_route.as_deref(), &req)
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
     let scores: Vec<f64> = parse_relevance_scores(&resp.content, chunks.len());
@@ -1808,7 +1995,7 @@ pub async fn chat_stream(
     )
     .await?;
     let env_id = resolve_env_id(&a, q.target_env_id.as_deref())?;
-    let (primary_route, fallback_route) = route_for(&state, &body.model, None)?;
+    let (primary_route, fallback_route) = route_for_env(&state, env_id, &body.model, None).await?;
     if body.messages.is_empty() {
         return Err(err_bad("messages must not be empty"));
     }
@@ -1843,14 +2030,15 @@ pub async fn chat_stream(
         .router
         .complete_stream(
             &client,
-            primary_route,
-            fallback_route,
+            &primary_route,
+            fallback_route.as_deref(),
             &crate::providers::CompletionRequest {
                 model: model_inner,
                 messages: body.messages.clone(),
                 temperature: None,
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -2071,6 +2259,7 @@ pub async fn agent_execute(
         messages: vec![crate::providers::ChatMessage {
             role: "user".into(),
             content: body.task.clone(),
+            ..Default::default()
         }],
         input: None,
         feature: body.feature.clone(),
@@ -2247,7 +2436,7 @@ pub async fn put_budget(
 /// Returns Ok(enforcement) when within budget; Err(429) on reject-mode
 /// breach. `degrade`/`queue` enforcement is surfaced to the caller via the
 /// response header `X-Sentin8-AI-Cost-Enforcement`.
-async fn check_budget(
+pub(crate) async fn check_budget(
     tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
     env_id: Uuid,
     feature: &str,
@@ -2910,22 +3099,13 @@ pub async fn document_ingest(
         .unwrap_or_else(|| format!("doc-{}", uuid::Uuid::new_v4()));
 
     // 2. Embed the batch (provider router).
-    let route = state
-        .routes
-        .values()
-        .find(|r| r.embedder.is_some())
-        .ok_or_else(|| {
-            (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "no embedding provider configured".to_string(),
-            )
-        })?;
+    let route = resolve_embedding_route(&state, env_id).await?;
     let client = reqwest::Client::new();
     let emb = state
         .router
         .embed(
             &client,
-            route,
+            &route,
             &crate::providers::EmbeddingRequest {
                 model: body
                     .model

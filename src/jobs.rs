@@ -49,7 +49,7 @@ pub struct EmbedJobChunk {
 pub fn spawn_embedding_consumer(
     pool: sqlx::PgPool,
     bus_client: sentin8::bus::client::BusClient,
-    routes: std::collections::HashMap<String, crate::providers::Route>,
+    routes: std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     router: std::sync::Arc<crate::providers::ProviderRouter>,
 ) {
     tokio::spawn(async move {
@@ -110,14 +110,20 @@ pub fn spawn_embedding_consumer(
 /// already exists are skipped (at-least-once delivery → effectively-once).
 async fn process_embedding_job(
     pool: &sqlx::PgPool,
-    routes: &std::collections::HashMap<String, crate::providers::Route>,
+    routes: &std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     router: &crate::providers::ProviderRouter,
     job: &EmbeddingJobEnvelope,
 ) -> Result<usize, String> {
-    let route = routes
-        .values()
-        .find(|r| r.embedder.is_some())
-        .ok_or_else(|| "no embedding provider configured".to_string())?;
+    let mut route = None;
+    for provider in ["openai", "ollama", "vllm"] {
+        if let Some(r) = routes.resolve(pool, job.env_id, provider).await {
+            if r.embedder.is_some() {
+                route = Some(r);
+                break;
+            }
+        }
+    }
+    let route = route.ok_or_else(|| "no embedding provider configured".to_string())?;
     let texts = job
         .chunks
         .iter()
@@ -127,7 +133,7 @@ async fn process_embedding_job(
     let emb = router
         .embed(
             &client,
-            route,
+            &route,
             &crate::providers::EmbeddingRequest {
                 model: job
                     .model
@@ -242,7 +248,7 @@ fn default_job_feature() -> String {
 pub fn spawn_summary_consumer(
     pool: sqlx::PgPool,
     bus_client: sentin8::bus::client::BusClient,
-    routes: std::collections::HashMap<String, crate::providers::Route>,
+    routes: std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     router: std::sync::Arc<crate::providers::ProviderRouter>,
 ) {
     tokio::spawn(async move {
@@ -369,14 +375,18 @@ async fn dead_letter_inner(
 /// normalized summary string.
 async fn process_completion_job(
     pool: &sqlx::PgPool,
-    routes: &std::collections::HashMap<String, crate::providers::Route>,
+    routes: &std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     router: &crate::providers::ProviderRouter,
     job: &CompletionJobEnvelope,
 ) -> Result<String, String> {
-    let route = routes
-        .values()
-        .find(|r| r.provider.name() != "none")
-        .ok_or_else(|| "no completion provider configured".to_string())?;
+    let mut route = None;
+    for provider in ["openai", "anthropic", "ollama", "vllm"] {
+        if let Some(r) = routes.resolve(pool, job.env_id, provider).await {
+            route = Some(r);
+            break;
+        }
+    }
+    let route = route.ok_or_else(|| "no completion provider configured".to_string())?;
     let client = reqwest::Client::new();
     let mut messages = Vec::new();
     if let Some(name) = &job.prompt_name {
@@ -404,6 +414,7 @@ async fn process_completion_job(
                 messages.push(crate::providers::ChatMessage {
                     role: "system".into(),
                     content: sys,
+                    ..Default::default()
                 });
             }
         }
@@ -411,11 +422,12 @@ async fn process_completion_job(
     messages.push(crate::providers::ChatMessage {
         role: "user".into(),
         content: job.input.clone(),
+        ..Default::default()
     });
     let resp = router
         .complete(
             &client,
-            route,
+            &route,
             None,
             &crate::providers::CompletionRequest {
                 model: job
@@ -427,6 +439,7 @@ async fn process_completion_job(
                 temperature: Some(0.0),
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -464,7 +477,7 @@ fn default_chunk_size_job() -> usize {
 pub fn spawn_document_consumer(
     pool: sqlx::PgPool,
     bus_client: sentin8::bus::client::BusClient,
-    routes: std::collections::HashMap<String, crate::providers::Route>,
+    routes: std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     router: std::sync::Arc<crate::providers::ProviderRouter>,
     storage: sentin8_storage_sdk::client::StorageClient,
 ) {
@@ -554,7 +567,7 @@ pub fn spawn_document_consumer(
 /// (extract happens upstream - the event carries the extracted-text key).
 async fn process_document_job(
     pool: &sqlx::PgPool,
-    routes: &std::collections::HashMap<String, crate::providers::Route>,
+    routes: &std::sync::Arc<crate::provider_routes::ProviderRouteCache>,
     router: &crate::providers::ProviderRouter,
     storage: &sentin8_storage_sdk::client::StorageClient,
     job: &DocumentJobEnvelope,

@@ -7,7 +7,7 @@
       "name": "MIT OR Apache-2.0",
       "identifier": "MIT OR Apache-2.0"
     },
-    "version": "0.1.0"
+    "version": "1.0.0"
   },
   "paths": {
     "/v1/admin/attributes": {
@@ -618,6 +618,99 @@
         }
       }
     },
+    "/v1/agent-policies": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/agent-policies` - list policies.",
+        "operationId": "ai.agent_policy.list",
+        "parameters": [
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Policies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyRecord"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:read": []
+          }
+        ]
+      }
+    },
+    "/v1/agent-policies/{name}": {
+      "put": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`PUT /v1/agent-policies/{name}` - upsert an agent policy.",
+        "operationId": "ai.agent_policy.upsert",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Policy saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:write": []
+          }
+        ]
+      }
+    },
     "/v1/agent/execute": {
       "post": {
         "tags": [
@@ -666,6 +759,228 @@
         "security": [
           {
             "sentin8:ai:chat:write": []
+          }
+        ]
+      }
+    },
+    "/v1/agents": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/agents` - list agents.",
+        "operationId": "ai.agent.list",
+        "parameters": [
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentRecord"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:read": []
+          }
+        ]
+      }
+    },
+    "/v1/agents/{name}": {
+      "put": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`PUT /v1/agents/{name}` - create or update an agent and its tool set.",
+        "operationId": "ai.agent.upsert",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Agent saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:write": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`DELETE /v1/agents/{name}` - remove an agent.",
+        "operationId": "ai.agent.delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Agent removed"
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:write": []
+          }
+        ]
+      }
+    },
+    "/v1/approvals": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/approvals` - pending approvals in the env.",
+        "operationId": "ai.approval.list",
+        "parameters": [
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approvals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalRecord"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:approve": []
+          }
+        ]
+      }
+    },
+    "/v1/approvals/{id}/decide": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`POST /v1/approvals/{id}/decide` - approve or deny a paused action.",
+        "operationId": "ai.approval.decide",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Decision recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:approve": []
           }
         ]
       }
@@ -930,6 +1245,291 @@
         "security": [
           {
             "sentin8:ai:completion:write": []
+          }
+        ]
+      }
+    },
+    "/v1/conversations": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/conversations` - list the caller's conversations.",
+        "operationId": "ai.conversation.list",
+        "parameters": [
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationRecord"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:conversation:read": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`POST /v1/conversations` - open a conversation bound to an agent.",
+        "operationId": "ai.conversation.create",
+        "parameters": [
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConversationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Conversation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:conversation:write": []
+          }
+        ]
+      }
+    },
+    "/v1/conversations/{id}": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/conversations/{id}` - one conversation.",
+        "operationId": "ai.conversation.get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:conversation:read": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`PUT /v1/conversations/{id}` - rename or archive.",
+        "operationId": "ai.conversation.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConversationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Conversation updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:conversation:write": []
+          }
+        ]
+      }
+    },
+    "/v1/conversations/{id}/messages": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/conversations/{id}/messages` - ordered history.",
+        "operationId": "ai.conversation.messages",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MessageRecord"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:conversation:read": []
+          }
+        ]
+      }
+    },
+    "/v1/conversations/{id}/turns": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`POST /v1/conversations/{id}/turns` - run one bounded agent turn.",
+        "description": "The loop: assemble context → provider → tool calls (gateway) → tool\nresults → provider, until the model stops or a guard trips. Every guard\nis recorded on the run; every message commits with the run update.",
+        "operationId": "ai.agent.turn",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostTurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Turn completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:run": []
           }
         ]
       }
@@ -1345,6 +1945,42 @@
             "description": "Service healthy"
           }
         }
+      }
+    },
+    "/v1/internal/agent/execute": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`POST /v1/internal/agent/execute` - the domain-step surface Sentin8:Flow\nproxy-backs to for a legacy JSON-intent agent workflow (ai DESIGN.md\n§4.1). The step's `step_config` names a tool; the gateway dispatches it\nunder the workflow's env with the `ai-proxy` workload identity.",
+        "operationId": "ai.agent.internal_step",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentStepRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Step executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentStepResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:run": []
+          }
+        ]
       }
     },
     "/v1/internal/schedules/run": {
@@ -1793,6 +2429,217 @@
         ]
       }
     },
+    "/v1/runs/{id}": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/runs/{id}` - one run's record.",
+        "operationId": "ai.run.get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:run": []
+          }
+        ]
+      }
+    },
+    "/v1/runs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`POST /v1/runs/{id}/cancel` - cancel a waiting/processing run.",
+        "operationId": "ai.run.cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Run cancelled"
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:agent:run": []
+          }
+        ]
+      }
+    },
+    "/v1/tools": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`GET /v1/tools` - the caller's permission-admitted tool catalogue.",
+        "operationId": "ai.tool.list",
+        "parameters": [
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ToolRecord"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:tool:read": []
+          }
+        ]
+      }
+    },
+    "/v1/tools/{name}": {
+      "put": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`PUT /v1/tools/{name}` - create or update a tenant tool.",
+        "operationId": "ai.tool.upsert",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertToolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tool saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolRecord"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:tool:write": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "`DELETE /v1/tools/{name}` - remove a tool.",
+        "operationId": "ai.tool.delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tool removed"
+          }
+        },
+        "security": [
+          {
+            "sentin8:ai:tool:write": []
+          }
+        ]
+      }
+    },
     "/v1/traces": {
       "get": {
         "tags": [
@@ -1865,6 +2712,48 @@
           "params": {},
           "requires_confirmation": {
             "type": "boolean"
+          }
+        }
+      },
+      "AgentRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prompt_name",
+          "policy_name",
+          "tools",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "policy_name": {
+            "type": "string"
+          },
+          "prompt_name": {
+            "type": "string"
+          },
+          "prompt_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1942,6 +2831,95 @@
           }
         }
       },
+      "AgentStepRequest": {
+        "type": "object",
+        "required": [
+          "workflow_id",
+          "env_id",
+          "step_name"
+        ],
+        "properties": {
+          "env_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {},
+          "step_config": {},
+          "step_kind": {
+            "type": "string",
+            "description": "Step kind Flow invoked (the engine's `step_kind`)."
+          },
+          "step_name": {
+            "type": "string"
+          },
+          "user_data": {},
+          "workflow_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AgentStepResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "next_step": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output": {},
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ApprovalRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "tool_name",
+          "arguments",
+          "state",
+          "created_at"
+        ],
+        "properties": {
+          "arguments": {},
+          "created_at": {
+            "type": "string"
+          },
+          "decided_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "tool_name": {
+            "type": "string"
+          }
+        }
+      },
       "AttributeUpserted": {
         "type": "object",
         "description": "An attribute upsert result.",
@@ -1957,17 +2935,112 @@
       },
       "ChatMessage": {
         "type": "object",
-        "description": "A single chat message in the normalized envelope.",
+        "description": "A single chat message in the normalized envelope.\n\n`tool_calls` is set on an assistant message that asked for tools;\n`tool_call_id` is set on a `role: \"tool\"` message carrying a result.",
         "required": [
-          "role",
-          "content"
+          "role"
         ],
         "properties": {
           "content": {
-            "type": "string"
+            "type": "string",
+            "description": "Text content. Empty on an assistant turn that only calls tools."
           },
           "role": {
+            "type": "string",
+            "description": "`system` | `user` | `assistant` | `tool`."
+          },
+          "tool_call_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Links a `role: \"tool\"` message to the call it answers."
+          },
+          "tool_calls": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            },
+            "description": "Tool calls an assistant message requested."
+          }
+        }
+      },
+      "ConversationRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "state",
+          "turn_count",
+          "tokens_total",
+          "cost_total",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "cost_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "created_at": {
             "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "tokens_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turn_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateConversationRequest": {
+        "type": "object",
+        "required": [
+          "agent_name"
+        ],
+        "properties": {
+          "agent_name": {
+            "type": "string",
+            "description": "Agent name to bind. Required - a conversation without an agent has no\nprompt, no tools, and no policy."
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "DecideApprovalRequest": {
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "description": "`approved` | `denied`."
           }
         }
       },
@@ -2277,6 +3350,52 @@
           }
         }
       },
+      "MessageRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "seq",
+          "role",
+          "content",
+          "token_count",
+          "created_at"
+        ],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "token_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tool_call_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "PolicyModeBody": {
         "type": "object",
         "description": "`POST /v1/admin/policy-sets/{mode}` body (RFW row actions).",
@@ -2292,6 +3411,53 @@
           },
           "policy_set_name": {
             "type": "string"
+          }
+        }
+      },
+      "PolicyRecord": {
+        "type": "object",
+        "required": [
+          "name",
+          "allowed_models",
+          "max_turns",
+          "max_tokens_per_turn",
+          "allowed_tool_classes",
+          "confirmation_classes",
+          "retention_days"
+        ],
+        "properties": {
+          "allowed_models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowed_tool_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmation_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_tokens_per_turn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max_turns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "retention_days": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -2460,6 +3626,25 @@
           "would_deny": {
             "type": "boolean",
             "description": "Whether the shadow evaluation would deny."
+          }
+        }
+      },
+      "PostTurnRequest": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The user's message for this turn."
+          },
+          "turn_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Client-supplied turn id - a retried turn returns the stored answer\ninstead of appending a duplicate."
           }
         }
       },
@@ -2924,6 +4109,55 @@
           }
         }
       },
+      "RunRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversation_id",
+          "turn",
+          "iterations",
+          "input_tokens",
+          "output_tokens",
+          "context_plan",
+          "created_at"
+        ],
+        "properties": {
+          "context_plan": {},
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "iterations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stop_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ScheduleRunRequest": {
         "type": "object",
         "description": "`POST /v1/internal/schedules/run` request (cron proxy-back).",
@@ -3076,6 +4310,72 @@
           }
         }
       },
+      "ToolCall": {
+        "type": "object",
+        "description": "A tool call a model emitted, normalised across providers.\n\nOpenAI-family providers carry `arguments` as a JSON *string*; Anthropic\ncarries an already-decoded object. Both converge here as a parsed\n[`serde_json::Value`] so the turn runner never handles provider wire\nshapes.",
+        "required": [
+          "id",
+          "name",
+          "arguments"
+        ],
+        "properties": {
+          "arguments": {
+            "description": "Decoded arguments object."
+          },
+          "id": {
+            "type": "string",
+            "description": "Provider-assigned call id (echoed back on the tool-result message)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Tool name - resolved against `ai.tools` by the gateway."
+          }
+        }
+      },
+      "ToolRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "input_schema",
+          "kind",
+          "target",
+          "required_scope",
+          "side_effect",
+          "requires_confirmation",
+          "enabled"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input_schema": {},
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required_scope": {
+            "type": "string"
+          },
+          "requires_confirmation": {
+            "type": "boolean"
+          },
+          "side_effect": {
+            "type": "string"
+          },
+          "target": {}
+        }
+      },
       "TraceArchiveRequest": {
         "type": "object",
         "description": "`POST /v1/internal/traces/archive` request.",
@@ -3200,6 +4500,114 @@
           }
         }
       },
+      "TurnResponse": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "conversation_id",
+          "turn",
+          "stop_reason",
+          "iterations",
+          "input_tokens",
+          "output_tokens"
+        ],
+        "properties": {
+          "approval_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Set when the turn paused for approval."
+          },
+          "assistant_message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageRecord"
+              }
+            ]
+          },
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "iterations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stop_reason": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateConversationRequest": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`active` | `archived`."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UpsertAgentRequest": {
+        "type": "object",
+        "required": [
+          "prompt_name"
+        ],
+        "properties": {
+          "policy_name": {
+            "type": "string"
+          },
+          "prompt_name": {
+            "type": "string"
+          },
+          "prompt_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tool names to bind. Unknown names are rejected (fail-closed)."
+          }
+        }
+      },
       "UpsertBudgetRequest": {
         "type": "object",
         "required": [
@@ -3241,6 +4649,41 @@
           "stage": {
             "type": "string",
             "description": "`input` (pre-provider) or `output` (pre-client)."
+          }
+        }
+      },
+      "UpsertPolicyRequest": {
+        "type": "object",
+        "properties": {
+          "allowed_models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowed_tool_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmation_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_tokens_per_turn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max_turns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "retention_days": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -3319,6 +4762,50 @@
           "provider": {
             "type": "string",
             "description": "'openai' | 'anthropic' | 'ollama' (v1 set -)."
+          }
+        }
+      },
+      "UpsertToolRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "input_schema": {},
+          "kind": {
+            "type": "string"
+          },
+          "max_response_bytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rate_limit_per_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "required_scope": {
+            "type": "string"
+          },
+          "requires_confirmation": {
+            "type": "boolean"
+          },
+          "side_effect": {
+            "type": "string"
+          },
+          "target": {},
+          "timeout_ms": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       }

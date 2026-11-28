@@ -4050,6 +4050,7 @@ dependencies = [
  "sentin8-ai-sdk",
  "sentin8-cron-sdk",
  "sentin8-flow-sdk",
+ "sentin8-func-sdk",
  "sentin8-secrets-sdk",
  "sentin8-storage-sdk",
  "serde",
@@ -4314,6 +4315,26 @@ source = "git+https://github.com/Sentin8/sentin8-flow?tag=flow-sdk-v1.0.0"
 dependencies = [
  "sentin8-flow-client",
  "sentin8-flow-contracts",
+]
+
+[[package]]
+name = "sentin8-func-client"
+version = "1.0.0"
+dependencies = [
+ "reqwest 0.12.28",
+ "sentin8-middleware",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "sentin8-func-sdk"
+version = "1.0.0"
+dependencies = [
+ "sentin8-func-client",
 ]
 
 [[package]]

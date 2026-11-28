@@ -345,3 +345,206 @@ mod tests {
         server.await.unwrap();
     }
 }
+
+// ── Agent plane (conversations, turns, tools, approvals) ──────────────────
+
+/// Request to open a conversation bound to an agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateConversationRequest {
+    /// Agent name to bind.
+    pub agent_name: String,
+    /// Optional conversation title.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub title: String,
+}
+
+/// A conversation record.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConversationRecord {
+    /// Conversation id.
+    pub id: uuid::Uuid,
+    /// Title.
+    pub title: String,
+    /// `active` | `archived`.
+    pub state: String,
+    /// Bound agent id, when set.
+    #[serde(default)]
+    pub agent_id: Option<uuid::Uuid>,
+    /// Completed turns.
+    pub turn_count: i32,
+    /// Cumulative tokens.
+    pub tokens_total: i64,
+    /// Cumulative cost (USD).
+    pub cost_total: f64,
+}
+
+/// A stored message.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MessageRecord {
+    /// Message id.
+    pub id: uuid::Uuid,
+    /// Monotonic per-conversation sequence.
+    pub seq: i32,
+    /// `system` | `user` | `assistant` | `tool`.
+    pub role: String,
+    /// Text content.
+    pub content: String,
+    /// Set on a `tool` message.
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    /// Model that produced an assistant message.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+/// Request to run one turn.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PostTurnRequest {
+    /// The user's message for this turn.
+    pub text: String,
+    /// Client turn id - a retry returns the stored answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+}
+
+/// One turn's result.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TurnResponse {
+    /// Run id.
+    pub run_id: uuid::Uuid,
+    /// Conversation id.
+    pub conversation_id: uuid::Uuid,
+    /// Turn number.
+    pub turn: i32,
+    /// `completed` | `max_turns` | `budget` | `cancelled` |
+    /// `awaiting_approval` | `error`.
+    pub stop_reason: String,
+    /// The final assistant message, when the turn completed.
+    #[serde(default)]
+    pub assistant_message: Option<MessageRecord>,
+    /// Set when the turn paused for approval.
+    #[serde(default)]
+    pub approval_id: Option<uuid::Uuid>,
+    /// Loop iterations executed.
+    pub iterations: i32,
+    /// Tokens consumed (input).
+    pub input_tokens: i64,
+    /// Tokens produced (output).
+    pub output_tokens: i64,
+}
+
+/// A tool definition the caller may use.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ToolRecord {
+    /// Tool id.
+    pub id: uuid::Uuid,
+    /// Model-facing name.
+    pub name: String,
+    /// Description.
+    pub description: String,
+    /// JSON Schema for the input.
+    pub input_schema: serde_json::Value,
+    /// `http_action` | `flow_workflow` | `func_module` | `builtin`.
+    pub kind: String,
+    /// Owner-side target reference.
+    pub target: serde_json::Value,
+    /// Required scope.
+    pub required_scope: String,
+    /// `read` | `write` | `irreversible`.
+    pub side_effect: String,
+    /// Whether confirmation is mandatory.
+    pub requires_confirmation: bool,
+    /// Whether the tool is currently enabled.
+    pub enabled: bool,
+}
+
+/// A pending approval.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ApprovalRecord {
+    /// Approval id.
+    pub id: uuid::Uuid,
+    /// Run id.
+    pub run_id: uuid::Uuid,
+    /// Tool name.
+    pub tool_name: String,
+    /// Tool arguments.
+    pub arguments: serde_json::Value,
+    /// `pending` | `approved` | `denied` | `expired`.
+    pub state: String,
+    /// Who decided, when decided.
+    #[serde(default)]
+    pub decided_by: Option<String>,
+}
+
+impl AiClient {
+    /// `POST /v1/conversations` - open a conversation bound to an agent.
+    pub async fn create_conversation(
+        &self,
+        req: &CreateConversationRequest,
+    ) -> Result<ConversationRecord, AiError> {
+        self.post_json("/v1/conversations", req).await
+    }
+
+    /// `GET /v1/conversations` - the caller's conversations.
+    pub async fn list_conversations(&self) -> Result<Vec<ConversationRecord>, AiError> {
+        self.get_json("/v1/conversations").await
+    }
+
+    /// `GET /v1/conversations/{id}/messages` - ordered history.
+    pub async fn list_messages(
+        &self,
+        conversation_id: uuid::Uuid,
+    ) -> Result<Vec<MessageRecord>, AiError> {
+        self.get_json(&format!("/v1/conversations/{conversation_id}/messages"))
+            .await
+    }
+
+    /// `POST /v1/conversations/{id}/turns` - run one bounded agent turn.
+    pub async fn post_turn(
+        &self,
+        conversation_id: uuid::Uuid,
+        req: &PostTurnRequest,
+    ) -> Result<TurnResponse, AiError> {
+        self.post_json(&format!("/v1/conversations/{conversation_id}/turns"), req)
+            .await
+    }
+
+    /// `GET /v1/tools` - the permission-admitted tool catalogue.
+    pub async fn list_tools(&self) -> Result<Vec<ToolRecord>, AiError> {
+        self.get_json("/v1/tools").await
+    }
+
+    /// `GET /v1/approvals?state=pending` - pending approvals.
+    pub async fn list_approvals(&self) -> Result<Vec<ApprovalRecord>, AiError> {
+        self.get_json("/v1/approvals").await
+    }
+
+    /// `POST /v1/approvals/{id}/decide` - approve or deny a paused action.
+    pub async fn decide_approval(
+        &self,
+        approval_id: uuid::Uuid,
+        decision: &str,
+    ) -> Result<ApprovalRecord, AiError> {
+        self.post_json(
+            &format!("/v1/approvals/{approval_id}/decide"),
+            &serde_json::json!({ "decision": decision }),
+        )
+        .await
+    }
+
+    async fn get_json<R: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<R, AiError> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .bearer_auth(self.auth_token.as_str())
+            .send()
+            .await
+            .map_err(|e| AiError::Http(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let detail = resp.text().await.unwrap_or_default();
+            return Err(AiError::Http(format!("status {status}: {detail}")));
+        }
+        resp.json().await.map_err(|e| AiError::Decode(e.to_string()))
+    }
+}

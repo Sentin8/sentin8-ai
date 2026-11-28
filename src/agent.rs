@@ -134,7 +134,7 @@ pub fn agent_workflow_request(
             // owning service and forwards the authorized action.
             base_url: String::new(),   // filled by the caller from config
             auth_token: String::new(), // the ticker/host uses a fresh M2M token
-            internal_path: "/v1/internal".into(),
+            internal_path: "/v1/internal/agent".into(),
             host_functions: Default::default(),
         },
         correlation_id: Some(correlation_id.to_string()),

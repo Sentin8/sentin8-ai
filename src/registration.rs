@@ -82,6 +82,7 @@ const ADMIN_UI_PAGES: &[AdminUiPage] = &[
 
 const SQL_1_INIT: &str = include_str!("../sql/init.sql");
 const SQL_2_EMBEDDING_MODEL_VERSION: &str = include_str!("../sql/v2_embedding_model_version.sql");
+const SQL_3_AGENT_PLANE: &str = include_str!("../sql/v3_agent_plane.sql");
 
 /// Serialize the utoipa OpenAPI spec (used for the `all` and `openapi` sections).
 
@@ -93,7 +94,7 @@ const POLICIES: &[PolicySetDecl] = &[
     PolicySetDecl {
         policy_set_name: "scope-mirror",
         description: "Action-granular scope permits for sentin8:ai over the LIVE effective scope set. Enforced - step 5 is the only gate.",
-        policies: "permit(principal, action == Action::\"sentin8:ai:completion:write\", resource) when { principal.scopes.contains(\"sentin8:ai:completion:write\") };\npermit(principal, action == Action::\"sentin8:ai:chat:write\", resource) when { principal.scopes.contains(\"sentin8:ai:chat:write\") };\npermit(principal, action == Action::\"sentin8:ai:embedding:write\", resource) when { principal.scopes.contains(\"sentin8:ai:embedding:write\") };\npermit(principal, action == Action::\"sentin8:ai:retrieval:read\", resource) when { principal.scopes.contains(\"sentin8:ai:retrieval:read\") };\npermit(principal, action == Action::\"sentin8:ai:prompt:read\", resource) when { principal.scopes.contains(\"sentin8:ai:prompt:read\") || principal.scopes.contains(\"sentin8:ai:prompt:write\") };\npermit(principal, action == Action::\"sentin8:ai:prompt:write\", resource) when { principal.scopes.contains(\"sentin8:ai:prompt:write\") };",
+        policies: "permit(principal, action == Action::\"sentin8:ai:completion:write\", resource) when { principal.scopes.contains(\"sentin8:ai:completion:write\") };\npermit(principal, action == Action::\"sentin8:ai:chat:write\", resource) when { principal.scopes.contains(\"sentin8:ai:chat:write\") };\npermit(principal, action == Action::\"sentin8:ai:embedding:write\", resource) when { principal.scopes.contains(\"sentin8:ai:embedding:write\") };\npermit(principal, action == Action::\"sentin8:ai:retrieval:read\", resource) when { principal.scopes.contains(\"sentin8:ai:retrieval:read\") };\npermit(principal, action == Action::\"sentin8:ai:prompt:read\", resource) when { principal.scopes.contains(\"sentin8:ai:prompt:read\") || principal.scopes.contains(\"sentin8:ai:prompt:write\") };\npermit(principal, action == Action::\"sentin8:ai:prompt:write\", resource) when { principal.scopes.contains(\"sentin8:ai:prompt:write\") };\npermit(principal, action == Action::\"sentin8:ai:conversation:read\", resource) when { principal.scopes.contains(\"sentin8:ai:conversation:read\") || principal.scopes.contains(\"sentin8:ai:conversation:write\") };\npermit(principal, action == Action::\"sentin8:ai:conversation:write\", resource) when { principal.scopes.contains(\"sentin8:ai:conversation:write\") };\npermit(principal, action == Action::\"sentin8:ai:agent:run\", resource) when { principal.scopes.contains(\"sentin8:ai:agent:run\") };\npermit(principal, action == Action::\"sentin8:ai:agent:read\", resource) when { principal.scopes.contains(\"sentin8:ai:agent:read\") || principal.scopes.contains(\"sentin8:ai:agent:write\") };\npermit(principal, action == Action::\"sentin8:ai:agent:write\", resource) when { principal.scopes.contains(\"sentin8:ai:agent:write\") };\npermit(principal, action == Action::\"sentin8:ai:agent:approve\", resource) when { principal.scopes.contains(\"sentin8:ai:agent:approve\") || principal.scopes.contains(\"sentin8:ai:agent:write\") };\npermit(principal, action == Action::\"sentin8:ai:tool:read\", resource) when { principal.scopes.contains(\"sentin8:ai:tool:read\") || principal.scopes.contains(\"sentin8:ai:tool:write\") };\npermit(principal, action == Action::\"sentin8:ai:tool:write\", resource) when { principal.scopes.contains(\"sentin8:ai:tool:write\") };\npermit(principal, action == Action::\"sentin8:ai:infer:write\", resource) when { principal.scopes.contains(\"sentin8:ai:infer:write\") };",
         schema: None,
         mode: "enforced",
         default_enabled: true,
@@ -103,6 +104,28 @@ const POLICIES: &[PolicySetDecl] = &[
 /// Default ReBAC relation tuples (design) - none declared by this
 /// service today; env admins author their own graph via the admin API.
 const RELATIONS: &[RelationDecl] = &[];
+
+/// Cross-service actions AI exposes to the BFF generic dispatcher
+/// (`/bff/action/{action}`). `agent.turn` opens a turn; `agent.approve`
+/// decides a paused approval. Design: ai DESIGN.md §4.1.
+const SERVICE_ACTIONS: &[sentin8::registration::ServiceActionEntry] = &[
+    sentin8::registration::ServiceActionEntry {
+        action: "agent.turn",
+        service_type: "sentin8:ai",
+        platform_domain_key: "ai",
+        method: "POST",
+        endpoint: "/v1/conversations/{conversation_id}/turns",
+        scope: "sentin8:ai:agent:run",
+    },
+    sentin8::registration::ServiceActionEntry {
+        action: "agent.approve",
+        service_type: "sentin8:ai",
+        platform_domain_key: "ai",
+        method: "POST",
+        endpoint: "/v1/approvals/{approval_id}/decide",
+        scope: "sentin8:ai:agent:approve",
+    },
+];
 
 /// Declarative event→work bindings (AGENTS.md "event-driven execution"):
 /// the AI service consumes its own stream family directly (document
@@ -135,6 +158,15 @@ fn event_triggers() -> &'static [sentin8::registration::EventTriggerDecl] {
                 event_type: "sentin8:ai:embedding:stale",
                 target: serde_json::json!({ "kind": "cron", "schedule_type": "ai-reembed-stale" }),
                 consumer_group: "sentin8-ai-maintenance",
+                retry: serde_json::json!({ "max_retries": 2, "backoff": "exponential" }),
+            },
+            // Agent turn trigger: an inbound event opens a turn instead of a
+            // job. `target.kind: "agent"` is the declarative binding the
+            // dispatcher routes to `POST /v1/conversations/{id}/turns`.
+            sentin8::registration::EventTriggerDecl {
+                event_type: "sentin8:ai:agent:turn_requested",
+                target: serde_json::json!({ "kind": "agent", "agent_name": "" }),
+                consumer_group: "sentin8-ai-agent",
                 retry: serde_json::json!({ "max_retries": 2, "backoff": "exponential" }),
             },
         ];
@@ -223,6 +255,14 @@ pub fn print(section: Option<String>) -> anyhow::Result<()> {
             AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:retrieval:read"),
             AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:prompt:read"),
             AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:prompt:write"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:conversation:read"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:conversation:write"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:agent:run"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:agent:read"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:agent:write"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:agent:approve"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:tool:read"),
+            AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:tool:write"),
             // Policy-admin surface (policy design; per-service scope).
             AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:policy:read"),
             AdminScope::Tuple("sentin8:ai:admin", "sentin8:ai:policy:write"),
@@ -246,6 +286,11 @@ pub fn print(section: Option<String>) -> anyhow::Result<()> {
                 version: 2,
                 name: "embedding_model_version",
                 sql: SQL_2_EMBEDDING_MODEL_VERSION,
+            },
+            SqlMigration {
+                version: 3,
+                name: "agent_plane",
+                sql: SQL_3_AGENT_PLANE,
             },
         ],
         pg_roles: PG_ROLES,
@@ -273,7 +318,7 @@ pub fn print(section: Option<String>) -> anyhow::Result<()> {
             },
         ],
         audit_findings: None,
-        service_actions: None,
+        service_actions: Some(SERVICE_ACTIONS),
         m2m_grants: Some(M2M_GRANTS),
         openapi_url: "/openapi.json",
         openapi: dump,

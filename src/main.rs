@@ -12,12 +12,14 @@
 
 mod admin_ui;
 mod agent;
+mod agent_gateway;
 mod ai_aliases;
 #[allow(dead_code)]
 #[allow(dead_code)]
 mod auth;
 #[allow(dead_code)]
 mod config;
+mod conversation;
 #[allow(dead_code)]
 mod handlers;
 mod jobs;
@@ -35,11 +37,19 @@ static OPENAPI_DUMP: fn() -> serde_json::Value = || {
 
 mod policy;
 #[allow(dead_code)]
+mod provider_routes;
+#[allow(dead_code)]
+mod rate_limit;
+#[allow(dead_code)]
 mod providers;
 mod registration;
 mod safety;
 #[allow(dead_code)]
 mod server;
+#[allow(dead_code)]
+mod tools;
+#[allow(dead_code)]
+mod turn;
 
 use utoipa::OpenApi;
 

@@ -117,10 +117,12 @@ async fn openai_chat_mock_roundtrip() {
                 messages: vec![sentin8_ai_server::providers::ChatMessage {
                     role: "user".into(),
                     content: "hi".into(),
+                    ..Default::default()
                 }],
                 temperature: Some(0.2),
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -170,10 +172,12 @@ async fn anthropic_chat_mock_roundtrip() {
                 messages: vec![sentin8_ai_server::providers::ChatMessage {
                     role: "user".into(),
                     content: "salut".into(),
+                    ..Default::default()
                 }],
                 temperature: None,
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -257,10 +261,12 @@ async fn provider_429_is_transient_terminal_401() {
                 messages: vec![sentin8_ai_server::providers::ChatMessage {
                     role: "user".into(),
                     content: "x".into(),
+                    ..Default::default()
                 }],
                 temperature: None,
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -304,6 +310,8 @@ impl sentin8_ai_server::providers::CompletionProvider for FlakyProvider {
             input_tokens: 1,
             output_tokens: 1,
             usage_estimated: false,
+            tool_calls: Vec::new(),
+            finish_reason: sentin8_ai_server::providers::FinishReason::Stop,
         })
     }
 }
@@ -334,10 +342,12 @@ async fn router_retries_transient_failure() {
                 messages: vec![sentin8_ai_server::providers::ChatMessage {
                     role: "user".into(),
                     content: "x".into(),
+                    ..Default::default()
                 }],
                 temperature: None,
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -398,10 +408,12 @@ async fn router_falls_back_to_secondary_route() {
                 messages: vec![sentin8_ai_server::providers::ChatMessage {
                     role: "user".into(),
                     content: "x".into(),
+                    ..Default::default()
                 }],
                 temperature: None,
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -598,10 +610,12 @@ async fn credential_resolves_from_secret_ref() {
                 messages: vec![sentin8_ai_server::providers::ChatMessage {
                     role: "user".into(),
                     content: "hi".into(),
+                    ..Default::default()
                 }],
                 temperature: None,
                 max_tokens: None,
                 tools: vec![],
+                tool_choice: None,
             },
         )
         .await
@@ -618,4 +632,169 @@ fn install_pq() {
     ONCE.call_once(|| {
         let _ = sentin8::tls::crypto::sentin8_pq_provider().install_default();
     });
+}
+
+// ── Agent plane (conversations, tools, RLS) ───────────────────────────────
+
+/// The conversation plane must enforce holder-scoped isolation: two users in
+/// the same env cannot see each other's conversations, and an env admin can.
+#[tokio::test]
+async fn conversation_holder_scope_isolates_users() {
+    install_pq();
+    let Some(pool) = db_pool().await else {
+        return;
+    };
+    let env_id = sentin8_ai_server::test_support::test_env(&pool).await;
+
+    // Seed an agent + tool as the service role under the env context.
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT sentin8_set_tenant_context($1)")
+        .bind(env_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO ai.agents (name, prompt_name, env_id) VALUES ('t-agent','p',$1) RETURNING id",
+    )
+    .bind(env_id)
+    .fetch_one(&mut *tx)
+    .await
+    .expect("insert agent");
+
+    // User A's conversation.
+    sqlx::query("SELECT sentin8_set_tenant_context($1, $2)")
+        .bind(env_id)
+        .bind("user-a")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let conv_a: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO ai.conversations (owner_sub, agent_id, env_id) VALUES ('user-a',$1,$2) RETURNING id",
+    )
+    .bind(agent_id)
+    .bind(env_id)
+    .fetch_one(&mut *tx)
+    .await
+    .expect("insert conv a");
+
+    // User B must not see user A's conversation.
+    sqlx::query("SELECT sentin8_set_tenant_context($1, $2)")
+        .bind(env_id)
+        .bind("user-b")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let seen_by_b: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ai.conversations WHERE id = $1")
+            .bind(conv_a)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    assert_eq!(seen_by_b, 0, "user B must not see user A's conversation");
+
+    // An env admin sees it (context-stamped flag).
+    sqlx::query("SELECT sentin8_set_tenant_context($1, $2, NULL, NULL, FALSE, FALSE, TRUE)")
+        .bind(env_id)
+        .bind("admin")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let seen_by_admin: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ai.conversations WHERE id = $1")
+            .bind(conv_a)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    assert_eq!(seen_by_admin, 1, "env admin must see any conversation in the env");
+
+    tx.rollback().await.unwrap();
+    sentin8_ai_server::test_support::cleanup_env(&pool, env_id).await;
+}
+
+/// A tool row's arguments schema must gate dispatch; and the canonical
+/// arguments hash must be order-independent (audit identity).
+#[test]
+fn tool_arguments_schema_and_hash_are_audit_safe() {
+    use sentin8_ai_server::tools::{arguments_hash, validate_arguments};
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {"account": {"type": "string"}},
+        "required": ["account"],
+        "additionalProperties": false,
+    });
+    assert!(validate_arguments(&schema, &serde_json::json!({"account":"a"})).is_ok());
+    assert!(validate_arguments(&schema, &serde_json::json!({})).is_err());
+    assert_ne!(
+        arguments_hash(&serde_json::json!({"a":1,"b":2})),
+        arguments_hash(&serde_json::json!({"a":1,"b":3}))
+    );
+    assert_eq!(
+        arguments_hash(&serde_json::json!({"a":1,"b":2})),
+        arguments_hash(&serde_json::json!({"b":2,"a":1})),
+        "key order must not change the audit hash"
+    );
+}
+
+/// A multi-iteration turn: the provider asks for a tool, the gateway's schema
+/// check runs, the tool result is appended, and the provider then answers.
+/// This pins the loop shape without a live provider or a live HTTP target.
+#[tokio::test]
+async fn agent_tool_call_normalises_and_validates() {
+    use sentin8_ai_server::providers::FinishReason;
+    use sentin8_ai_server::turn::wants_tools;
+
+    // OpenAI-family wire shape (arguments as a JSON string) → ToolCall.
+    let resp: sentin8_ai_server::providers::CompletionResponse =
+        serde_json::from_value(serde_json::json!({
+            "content": "",
+            "model": "gpt-test",
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "usage_estimated": false,
+            "tool_calls": [{
+                "id": "call_1",
+                "name": "lookup_account",
+                "arguments": {"account": "a-1"}
+            }],
+            "finish_reason": "tool_calls"
+        }))
+        .unwrap();
+    assert_eq!(resp.finish_reason, FinishReason::ToolCalls);
+    assert_eq!(resp.tool_calls.len(), 1);
+    assert_eq!(resp.tool_calls[0].name, "lookup_account");
+    assert!(wants_tools(resp.finish_reason, &resp.tool_calls));
+
+    // The gateway must reject arguments that violate the declared schema.
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {"account": {"type": "string"}},
+        "required": ["account"],
+    });
+    assert!(
+        sentin8_ai_server::tools::validate_arguments(&schema, &resp.tool_calls[0].arguments).is_ok()
+    );
+    assert!(
+        sentin8_ai_server::tools::validate_arguments(&schema, &serde_json::json!({"nope": 1})).is_err()
+    );
+}
+
+/// The gateway's sanitizer must strip PII deny-list keys from a tool result
+/// before it re-enters the transcript - the exfiltration channel in a loop.
+#[test]
+fn tool_results_are_pii_stripped_by_the_gateway() {
+    let raw = serde_json::json!({
+        "account": "a-1",
+        "email": "someone@example.test",
+        "token": "leak-me",
+        "rows": [{"pan": "4111111111111111", "note": "ok"}],
+    });
+    // cap 65536 (default) so only the PII pass matters here.
+    let clean = sentin8_ai_server::agent_gateway::sanitize_tool_result(raw, 65536);
+    let s = clean.to_string();
+    assert!(!s.contains("someone@example.test"), "email must be stripped");
+    assert!(!s.contains("leak-me"), "token must be stripped");
+    assert!(!s.contains("4111111111111111"), "pan must be stripped");
+    assert!(clean.get("account").is_some(), "non-PII keys survive");
+    // Nested rows keep their non-PII members.
+    assert!(clean["rows"][0]["note"] == "ok");
 }
